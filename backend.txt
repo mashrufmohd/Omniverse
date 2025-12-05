@@ -1,0 +1,72 @@
+abfrl-backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                  # 🚀 Application Entry Point
+│   │
+│   ├── api/                     # 🌐 Interface Layer (Routes)
+│   │   ├── __init__.py
+│   │   ├── deps.py              # Dependency Injection (DB session, Current User)
+│   │   └── v1/
+│   │       ├── __init__.py
+│   │       ├── api.py           # Router aggregator
+│   │       ├── endpoints/
+│   │       │   ├── __init__.py
+│   │       │   ├── chat.py      # Main Chat Endpoint (Web + Webhook)
+│   │       │   ├── products.py  # Product management
+│   │       │   ├── orders.py    # Order management
+│   │       │   └── webhook.py   # Telegram/WhatsApp Webhook handler
+│   │
+│   ├── core/                    # ⚙️ Infrastructure Layer
+│   │   ├── __init__.py
+│   │   ├── config.py            # Environment variables (Pydantic Settings)
+│   │   ├── security.py          # JWT Token logic
+│   │   └── exceptions.py        # Custom error handling
+│   │
+│   ├── db/                      # 💾 Database Layer
+│   │   ├── __init__.py
+│   │   ├── session.py           # Supabase/Postgres Engine connection
+│   │   └── base.py              # SQLAlchemy Base model
+│   │
+│   ├── models/                  # 🗄️ Database Tables (SQLAlchemy)
+│   │   ├── __init__.py
+│   │   ├── user.py              # Users & Loyalty Points
+│   │   ├── product.py           # Catalog & Inventory
+│   │   ├── order.py             # Orders & OrderItems
+│   │   └── chat.py              # Conversation History & Session State
+│   │
+│   ├── schemas/                 # 📝 Pydantic Models (Data Validation)
+│   │   ├── __init__.py
+│   │   ├── chat.py              # Request/Response schemas for LLM
+│   │   ├── product.py
+│   │   └── order.py
+│   │
+│   ├── services/                # 🛠️ Business Logic (The "Tools")
+│   │   ├── __init__.py
+│   │   ├── vector_store.py      # Qdrant/Pinecone Wrapper
+│   │   ├── recommendation.py    # RAG Logic
+│   │   ├── inventory.py         # Mock Inventory Logic
+│   │   ├── payment.py           # Mock Payment Gateway
+│   │   └── fulfillment.py       # Delivery estimation logic
+│   │
+│   └── agents/                  # 🧠 AI Layer (LangGraph/Gemini)
+│       ├── __init__.py
+│       ├── master.py            # The Orchestrator (LangGraph StateGraph)
+│       ├── state.py             # AgentState definition (TypedDict)
+│       ├── prompts.py           # System Prompts for all agents
+│       ├── tools.py             # LangChain Tools wrapping /services
+│       └── llm_client.py        # Gemini API Configuration
+│
+├── data/                        # 📄 Seed Data for Mocking
+│   ├── products_seed.json
+│   ├── inventory_seed.json
+│   └── stores_seed.json
+│
+├── tests/                       # 🧪 Testing
+│   ├── __init__.py
+│   └── test_api.py
+│
+├── .env                         # Secrets (API Keys, DB URL)
+├── .gitignore
+├── docker-compose.yml           # For local DB/Vector DB
+├── Dockerfile                   # For deployment (Render)
+└── requirements.txt             # Dependencies

@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Main Store",
+    "location": "Downtown"
+  },
+  {
+    "name": "Branch Store",
+    "location": "Suburb"
+  }
+]

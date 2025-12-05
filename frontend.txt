@@ -1,0 +1,70 @@
+abfrl-frontend/
+├── public/                     # Static assets
+│   ├── images/
+│   │   ├── logo.png
+│   │   └── hero-bg.jpg
+│   └── icons/
+│
+├── src/
+│   ├── app/                    # 🚀 Next.js App Router
+│   │   ├── layout.tsx          # Global Layout (Providers, Fonts)
+│   │   ├── page.tsx            # Main Chat Interface (The "Home")
+│   │   ├── checkout/           # Checkout Page
+│   │   │   └── page.tsx
+│   │   ├── profile/            # User Profile & Orders
+│   │   │   └── page.tsx
+│   │   └── globals.css         # Global Tailwind Imports
+│   │
+│   ├── components/             # 🧩 UI Components
+│   │   ├── ui/                 # Atomic Components (Buttons, Inputs)
+│   │   │   ├── button.tsx
+│   │   │   ├── input.tsx
+│   │   │   ├── card.tsx
+│   │   │   ├── avatar.tsx
+│   │   │   └── spinner.tsx
+│   │   │
+│   │   ├── chat/               # Chat Specific Components
+│   │   │   ├── chat-interface.tsx   # Main container
+│   │   │   ├── message-list.tsx     # Scrollable area
+│   │   │   ├── message-bubble.tsx   # Individual text bubble
+│   │   │   ├── chat-input.tsx       # Text area + Mic button
+│   │   │   └── typing-indicator.tsx
+│   │   │
+│   │   ├── product/            # E-commerce Components
+│   │   │   ├── product-card.tsx     # Rendered inside chat
+│   │   │   ├── product-carousel.tsx # Horizontal scroll list
+│   │   │   └── cart-drawer.tsx      # Slide-out cart
+│   │   │
+│   │   └── layout/             # Header, Footer, Sidebar
+│   │       ├── header.tsx
+│   │       └── mobile-nav.tsx
+│   │
+│   ├── lib/                    # 🛠️ Utilities
+│   │   ├── utils.ts            # Class merger (clsx/tailwind-merge)
+│   │   ├── api.ts              # Axios instance (connects to FastAPI)
+│   │   └── constants.ts        # Config constants
+│   │
+│   ├── hooks/                  # 🎣 Custom React Hooks
+│   │   ├── use-chat.ts         # Logic for sending/receiving messages
+│   │   ├── use-cart.ts         # Cart logic (Add/Remove/Total)
+│   │   ├── use-speech.ts       # Web Speech API (STT/TTS)
+│   │   └── use-scroll.ts       # Auto-scroll to bottom of chat
+│   │
+│   ├── context/                # 🌐 Global State Providers
+│   │   ├── cart-context.tsx
+│   │   └── auth-context.tsx
+│   │
+│   ├── types/                  # 📝 TypeScript Interfaces
+│   │   ├── index.ts
+│   │   ├── api-response.ts
+│   │   └── product.ts
+│   │
+│   └── styles/                 # Additional CSS (Animations)
+│       └── animations.css
+│
+├── .env.local                  # Environment Variables
+├── next.config.js
+├── tailwind.config.ts
+├── tsconfig.json
+├── package.json
+└── README.md

@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Wireless Headphones",
+    "description": "High-quality wireless headphones with noise cancellation.",
+    "price": 99.99,
+    "category": "Electronics",
+    "stock": 100
+  },
+  {
+    "name": "Smartphone Case",
+    "description": "Protective case for smartphones.",
+    "price": 19.99,
+    "category": "Accessories",
+    "stock": 200
+  }
+]
