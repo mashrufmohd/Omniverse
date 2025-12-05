@@ -1,10 +1,21 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Syne, Space_Mono } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/context/auth-context'
 import { CartProvider } from '@/context/cart-context'
 
-const inter = Inter({ subsets: ['latin'] })
+const syne = Syne({ 
+  subsets: ['latin'],
+  variable: '--font-syne',
+  display: 'swap',
+})
+
+const spaceMono = Space_Mono({ 
+  weight: ['400', '700'],
+  subsets: ['latin'],
+  variable: '--font-space-mono',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'ABFRL - Conversational Retail',
@@ -18,7 +29,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={`${syne.variable} ${spaceMono.variable} font-sans bg-background text-foreground antialiased`}>
         <AuthProvider>
           <CartProvider>
             {children}
