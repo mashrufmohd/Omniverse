@@ -10,12 +10,14 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 export default function CartPage() {
-  const { cart, removeFromCart, updateQuantity } = useCart()
+  const { cart, summary, removeFromCart, updateQuantity } = useCart()
   const router = useRouter()
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const shipping = 5.00
-  const total = subtotal + shipping
+  // Use summary from context if available, otherwise fallback (though context should always have summary now)
+  const subtotal = summary?.subtotal ?? cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const shipping = summary?.shipping ?? 0
+  const discount = summary?.discount ?? 0
+  const total = summary?.total ?? (subtotal + shipping)
 
   if (cart.length === 0) {
     return (
@@ -98,7 +100,7 @@ export default function CartPage() {
                       </div>
 
                       <p className="text-xl font-bold font-mono">
-                        ${(item.price * item.quantity).toFixed(2)}
+                        ₹{(item.price * item.quantity).toFixed(2)}
                       </p>
                     </div>
                   </div>
@@ -115,16 +117,22 @@ export default function CartPage() {
               <div className="space-y-4 font-mono text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="font-bold">${subtotal.toFixed(2)}</span>
+                  <span className="font-bold">₹{subtotal.toFixed(2)}</span>
                 </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount {summary?.discountCode && `(${summary.discountCode})`}</span>
+                    <span className="font-bold">-₹{discount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-gray-600">Shipping</span>
-                  <span className="font-bold">${shipping.toFixed(2)}</span>
+                  <span className="font-bold">{shipping === 0 ? 'Free' : `₹${shipping.toFixed(2)}`}</span>
                 </div>
                 <div className="border-t-2 border-black pt-4 mt-4">
                   <div className="flex justify-between text-lg">
                     <span className="font-bold">Total</span>
-                    <span className="font-bold">${total.toFixed(2)}</span>
+                    <span className="font-bold">₹{total.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -144,6 +152,7 @@ export default function CartPage() {
                       Apply
                     </Button>
                   </div>
+                  <p className="text-xs text-gray-500">You can also ask the chatbot to apply a code!</p>
                 </div>
 
                 <Button 

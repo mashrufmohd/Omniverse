@@ -4,18 +4,11 @@ import { useState, useEffect, useRef } from 'react'
 import { ChatMessage } from '@/components/chat/chat-message'
 import { ChatInput } from '@/components/chat/chat-input'
 import { ChatMessage as ChatMessageType } from '@/types'
-import { sendChatMessage } from '@/lib/api/chat'
+import { useChat } from '@/hooks/use-chat'
 import { useCart } from '@/hooks/use-cart'
 
 export function ChatInterface() {
-  const [messages, setMessages] = useState<ChatMessageType[]>([
-    {
-      role: 'ai',
-      content: "Hello! I'm your Master Sales Agent. How can I help you find the perfect product today?",
-      timestamp: new Date().toISOString()
-    }
-  ])
-  const [isLoading, setIsLoading] = useState(false)
+  const { messages, sendMessage, isLoading } = useChat()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { addToCart } = useCart()
 
@@ -28,40 +21,12 @@ export function ChatInterface() {
   }, [messages])
 
   const handleSendMessage = async (content: string) => {
-    const userMessage: ChatMessageType = {
-      role: 'user',
-      content,
-      timestamp: new Date().toISOString()
-    }
-
-    setMessages(prev => [...prev, userMessage])
-    setIsLoading(true)
-
-    try {
-      const response = await sendChatMessage(content)
-      
-      const aiMessage: ChatMessageType = {
-        role: 'ai',
-        content: response.ai_message,
-        timestamp: new Date().toISOString(),
-        product_cards: response.product_cards,
-        suggested_actions: response.suggested_actions
-      }
-
-      setMessages(prev => [...prev, aiMessage])
-    } catch (error) {
-      console.error('Failed to send message:', error)
-      // Add error message handling here
-    } finally {
-      setIsLoading(false)
-    }
+    await sendMessage(content)
   }
 
   const handleAction = async (action: string, data?: any) => {
     if (action === 'add_to_cart' && data) {
       addToCart(data)
-      // Optionally send a message to AI that item was added
-      // handleSendMessage(`I added ${data.name} to my cart`)
     } else {
       handleSendMessage(action)
     }
@@ -79,9 +44,9 @@ export function ChatInterface() {
         ))}
         {isLoading && (
           <div className="flex items-center gap-2 p-4 text-muted-foreground animate-pulse">
-            <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="h-2 w-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
         )}
         <div ref={messagesEndRef} />

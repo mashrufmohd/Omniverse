@@ -8,8 +8,7 @@ import { CartDrawer } from '@/components/product/cart-drawer'
 import { useCart } from '@/hooks/use-cart'
 
 export function Header() {
-  const [cartOpen, setCartOpen] = useState(false)
-  const { cart } = useCart()
+  const { cart, isCartOpen, openCart, closeCart } = useCart()
 
   return (
     <>
@@ -49,11 +48,11 @@ export function Header() {
                   <span className="sr-only">Profile</span>
                 </Button>
               </Link>
-              <Link href="/cart">
-                <Button 
+              <Button 
                   variant="ghost" 
                   size="sm" 
                   className="h-10 w-10 rounded-none border-2 border-border p-0 hover:bg-secondary hover:text-secondary-foreground shadow-retro hover:shadow-retro-hover transition-all relative"
+                  onClick={openCart}
                 >
                   <ShoppingCart className="h-5 w-5" />
                   {cart.length > 0 && (
@@ -63,12 +62,11 @@ export function Header() {
                   )}
                   <span className="sr-only">Cart</span>
                 </Button>
-              </Link>
             </div>
           </nav>
         </div>
       </header>
-      {/* <CartDrawer isOpen={cartOpen} onClose={() => setCartOpen(false)} /> */}
+      <CartDrawer isOpen={isCartOpen} onClose={closeCart} />
     </>
   )
 }

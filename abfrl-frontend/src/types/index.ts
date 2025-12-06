@@ -1,20 +1,18 @@
 export interface Product {
-  id: string
+  id: number
   name: string
   price: number
   description?: string
-  image_url: string
-  sizes?: string[]
-  colors?: string[]
-  rating?: number
-  reviews?: number
-  cta?: string
+  imageUrl?: string
+  image_url?: string
 }
 
-export interface CartItem extends Product {
-  quantity: number
-  selectedSize?: string
-  selectedColor?: string
+export interface Message {
+  id: string
+  text: string
+  sender: 'user' | 'ai'
+  timestamp: Date
+  products?: Product[]
 }
 
 export interface ChatMessage {
@@ -23,6 +21,11 @@ export interface ChatMessage {
   timestamp: string
   product_cards?: Product[]
   suggested_actions?: string[]
+}
+
+export interface CartItem extends Product {
+  quantity: number
+  selectedSize?: string
 }
 
 export interface ChatResponse {

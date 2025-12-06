@@ -4,37 +4,77 @@ from langchain_core.messages import HumanMessage
 from app.db.session import get_db
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.agents.master import MasterAgent
+from app.models.chat import ChatSession, Message
+from datetime import datetime
 
 router = APIRouter()
-
-# In-memory history for MVP (Replace with Redis/Postgres in Prod)
-chat_history_store = {}
 
 @router.post("/", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     user_id = request.user_id
     
-    # 1. Retrieve History
-    if user_id not in chat_history_store:
-        chat_history_store[user_id] = []
+    # 1. Get or Create Chat Session (Persistent)
+    chat_session = db.query(ChatSession).filter(ChatSession.session_id == user_id).first()
+    if not chat_session:
+        chat_session = ChatSession(session_id=user_id, channel=request.channel)
+        db.add(chat_session)
+        db.commit()
+        db.refresh(chat_session)
     
-    # 2. Prepare Input
-    current_history = chat_history_store[user_id]
-    current_history.append(HumanMessage(content=request.message))
+    # 2. Retrieve History from DB
+    # Get last 20 messages ordered by timestamp
+    db_messages = db.query(Message).filter(
+        Message.session_id == chat_session.id
+    ).order_by(Message.timestamp.asc()).limit(20).all()
     
-    # 3. Invoke Agent
+    chat_history = []
+    for msg in db_messages:
+        chat_history.append({
+            "role": msg.role,
+            "content": msg.content
+        })
+    
+    # 3. Invoke Agent with history and user_id
     try:
         agent = MasterAgent(db)
-        response_text = agent.process_message(request.message)
+        result = agent.process_message(request.message, chat_history, user_id)
         
-        # 4. Parse for Product Cards (Simple Logic for MVP)
-        products = [] 
-        # Logic: If agent mentioned products, fetch them
+        # 4. Store conversation in DB
+        user_msg = Message(
+            session_id=chat_session.id,
+            role="user",
+            content=request.message,
+            timestamp=datetime.utcnow()
+        )
+        db.add(user_msg)
+        
+        ai_msg = Message(
+            session_id=chat_session.id,
+            role="ai",
+            content=result["response"],
+            timestamp=datetime.utcnow()
+        )
+        db.add(ai_msg)
+        db.commit()
         
         return ChatResponse(
-            response_text=response_text,
-            suggested_products=products
+            response=result["response"],
+            products=result.get("products", []),
+            cart_summary=result.get("cart_summary")
         )
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/history/{user_id}")
+async def clear_chat_history(user_id: str, db: Session = Depends(get_db)):
+    """Clear chat history for a user"""
+    chat_session = db.query(ChatSession).filter(ChatSession.session_id == user_id).first()
+    if chat_session:
+        # Delete all messages
+        db.query(Message).filter(Message.session_id == chat_session.id).delete()
+        db.commit()
+        return {"status": "success", "message": "Chat history cleared"}
+    return {"status": "success", "message": "No history found"}

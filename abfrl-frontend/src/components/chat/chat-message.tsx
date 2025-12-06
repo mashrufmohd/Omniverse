@@ -1,28 +1,27 @@
 'use client'
 
-import { ChatMessage as ChatMessageType } from '@/types'
+import { Message } from '@/types'
 import { cn } from '@/lib/utils'
 import { ProductCard } from '@/components/product/product-card'
-import { User, Bot } from 'lucide-react'
 
 interface ChatMessageProps {
-  message: ChatMessageType
+  message: Message
   onAction?: (action: string, data?: any) => void
 }
 
 export function ChatMessage({ message, onAction }: ChatMessageProps) {
-  const isUser = message.role === 'user'
+  const isUser = message.sender === 'user'
 
   return (
     <div className={cn(
-      "flex w-full gap-4 p-4 animate-fade-in",
+      "flex w-full gap-4 p-4",
       isUser ? "flex-row-reverse" : "flex-row"
     )}>
       <div className={cn(
-        "flex h-10 w-10 shrink-0 items-center justify-center border-2 border-border shadow-retro",
-        isUser ? "bg-accent text-accent-foreground" : "bg-primary text-primary-foreground"
+        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-semibold",
+        isUser ? "bg-blue-100 text-blue-600" : "bg-gray-200 text-gray-700"
       )}>
-        {isUser ? <User className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
+        {isUser ? "U" : "AI"}
       </div>
 
       <div className={cn(
@@ -30,40 +29,20 @@ export function ChatMessage({ message, onAction }: ChatMessageProps) {
         isUser ? "items-end" : "items-start"
       )}>
         <div className={cn(
-          "relative px-6 py-4 border-2 border-border shadow-retro text-sm md:text-base",
+          "px-4 py-3 rounded-lg text-sm md:text-base",
           isUser 
-            ? "bg-white text-foreground rounded-none" 
-            : "bg-white text-foreground rounded-none"
+            ? "bg-blue-600 text-white" 
+            : "bg-gray-200 text-gray-900"
         )}>
-          <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-          <span 
-            className="text-[10px] text-muted-foreground mt-2 block font-mono uppercase opacity-70"
-            suppressHydrationWarning
-          >
-            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
+          <p className="whitespace-pre-wrap">{message.text}</p>
         </div>
 
-        {message.product_cards && message.product_cards.length > 0 && (
-          <div className="flex gap-4 overflow-x-auto pb-4 w-full max-w-full mt-2 px-1">
-            {message.product_cards.map((product) => (
+        {message.products && message.products.length > 0 && (
+          <div className="flex gap-4 overflow-x-auto pb-4 w-full max-w-full mt-2">
+            {message.products.map((product) => (
               <div key={product.id} className="min-w-[280px] max-w-[280px]">
-                <ProductCard product={product} onAction={onAction} />
+                <ProductCard product={product} />
               </div>
-            ))}
-          </div>
-        )}
-
-        {message.suggested_actions && message.suggested_actions.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {message.suggested_actions.map((action, idx) => (
-              <button
-                key={idx}
-                onClick={() => onAction?.(action)}
-                className="px-4 py-2 bg-white border-2 border-border text-sm font-bold uppercase hover:bg-secondary hover:text-secondary-foreground hover:shadow-retro transition-all active:translate-y-1 active:shadow-none"
-              >
-                {action}
-              </button>
             ))}
           </div>
         )}
