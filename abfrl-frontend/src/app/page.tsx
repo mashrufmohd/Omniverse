@@ -2,17 +2,18 @@
 
 import { ChatInterface } from '@/components/chat/chat-interface'
 import { Header } from '@/components/layout/header'
+import { CartPanel } from '@/components/product/cart-panel'
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-background overflow-hidden">
       <Header />
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold text-center mb-8">
-            Welcome to ABFRL - Your AI Shopping Assistant
-          </h1>
+      <main className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0">
           <ChatInterface />
+        </div>
+        <div className="w-[400px] hidden lg:block h-full border-l-2 border-border">
+          <CartPanel />
         </div>
       </main>
     </div>

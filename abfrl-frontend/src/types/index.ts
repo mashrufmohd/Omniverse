@@ -1,26 +1,49 @@
 export interface Product {
-  id: number
-  name: string
-  description: string
-  price: number
-  imageUrl?: string
-  category?: string
-}
-
-export interface Message {
   id: string
-  text: string
-  sender: 'user' | 'ai'
-  timestamp: Date
-  products?: Product[]
+  name: string
+  price: number
+  description?: string
+  image_url: string
+  sizes?: string[]
+  colors?: string[]
+  rating?: number
+  reviews?: number
+  cta?: string
 }
 
-export interface ChatRequest {
-  user_id: string
-  message: string
+export interface CartItem extends Product {
+  quantity: number
+  selectedSize?: string
+  selectedColor?: string
+}
+
+export interface ChatMessage {
+  role: 'user' | 'ai'
+  content: string
+  timestamp: string
+  product_cards?: Product[]
+  suggested_actions?: string[]
 }
 
 export interface ChatResponse {
-  response: string
-  products?: Product[]
+  ai_message: string
+  product_cards?: Product[]
+  suggested_actions?: string[]
+  cart_summary?: {
+    items: CartItem[]
+    total: number
+  }
+  order_status?: {
+    status: string
+    eta: string
+  }
+  metadata?: any
+}
+
+export interface Order {
+  id: string
+  items: CartItem[]
+  total: number
+  status: string
+  date: string
 }
