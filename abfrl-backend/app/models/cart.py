@@ -11,6 +11,7 @@ class Cart(Base):
     user_id: Mapped[str] = mapped_column(String, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    applied_discount_code: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     
     items: Mapped[list["CartItem"]] = relationship(back_populates="cart", cascade="all, delete-orphan")
 

@@ -1,7 +1,9 @@
 'use client'
 
-import { createContext, useContext, useReducer, ReactNode, useState } from 'react'
+import { createContext, useContext, useReducer, ReactNode, useState, useEffect, useCallback } from 'react'
 import { Product, CartItem } from '@/types'
+import api from '@/lib/api'
+import { DEFAULT_USER_ID } from '@/lib/constants'
 
 interface CartState {
   cart: CartItem[]
@@ -35,40 +37,13 @@ const calculateSummary = (cart: CartItem[]) => {
 const cartReducer = (state: CartState, action: CartAction): CartState => {
   switch (action.type) {
     case 'ADD_TO_CART':
-      let newCartAdd: CartItem[]
-      const existingItem = state.cart.find(item => item.id === action.payload.id)
-      if (existingItem) {
-        newCartAdd = state.cart.map(item =>
-          item.id === action.payload.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        )
-      } else {
-        newCartAdd = [...state.cart, { ...action.payload, quantity: 1 }]
-      }
-      return {
-        ...state,
-        cart: newCartAdd,
-        summary: calculateSummary(newCartAdd)
-      }
+      // Optimistic update logic (can be kept or removed if we rely solely on API)
+      // For now, we'll rely on SET_CART from API response to ensure sync
+      return state
     case 'REMOVE_FROM_CART':
-      const newCartRemove = state.cart.filter(item => item.id !== action.payload)
-      return {
-        ...state,
-        cart: newCartRemove,
-        summary: calculateSummary(newCartRemove)
-      }
+      return state
     case 'UPDATE_QUANTITY':
-      const newCartUpdate = state.cart.map(item =>
-        item.id === action.payload.id
-          ? { ...item, quantity: Math.max(0, action.payload.quantity) }
-          : item
-      )
-      return {
-        ...state,
-        cart: newCartUpdate,
-        summary: calculateSummary(newCartUpdate)
-      }
+      return state
     case 'CLEAR_CART':
       return { ...state, cart: [], summary: calculateSummary([]) }
     case 'SET_CART':
@@ -82,14 +57,38 @@ const CartContext = createContext<{
   cart: CartItem[]
   summary: CartState['summary']
   addToCart: (product: Product & { selectedSize?: string, selectedColor?: string }) => void
-  removeFromCart: (id: number) => void
-  updateQuantity: (id: number, quantity: number) => void
+  removeFromCart: (id: number, size?: string) => void
+  updateQuantity: (id: number, quantity: number, size?: string) => void
   clearCart: () => void
   setCart: (data: { items: CartItem[], summary: CartState['summary'] }) => void
+  refreshCart: () => Promise<void>
   isCartOpen: boolean
   openCart: () => void
   closeCart: () => void
 } | null>(null)
+
+const mapBackendCartToFrontend = (data: any) => {
+  const backendItems = data.items
+  const frontendItems: CartItem[] = backendItems.map((item: any) => ({
+    id: item.product_id,
+    name: item.product_name,
+    price: item.price,
+    quantity: item.quantity,
+    imageUrl: item.image_url,
+    image_url: item.image_url,
+    description: '',
+    selectedSize: item.size
+  }))
+  
+  const summary = {
+    subtotal: data.subtotal,
+    shipping: data.shipping,
+    discount: data.discount,
+    total: data.total,
+    discountCode: data.discount_code
+  }
+  return { items: frontendItems, summary }
+}
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, { 
@@ -98,21 +97,85 @@ export function CartProvider({ children }: { children: ReactNode }) {
   })
   const [isCartOpen, setIsCartOpen] = useState(false)
 
-  const addToCart = (product: Product & { selectedSize?: string, selectedColor?: string }) => {
-    dispatch({ type: 'ADD_TO_CART', payload: product })
-    setIsCartOpen(true)
+  const fetchCart = useCallback(async () => {
+    try {
+      // We don't pass discount code here, the backend should remember it if we persisted it
+      // But wait, the backend get_cart endpoint takes discount_code as query param optionally
+      // If we persisted it in the Cart model, we don't need to pass it.
+      // Let's assume the backend handles it now.
+      const response = await api.get(`/api/v1/cart/?user_id=${DEFAULT_USER_ID}`)
+      const { items, summary } = mapBackendCartToFrontend(response.data)
+      dispatch({ type: 'SET_CART', payload: { items, summary } })
+    } catch (error) {
+      console.error("Failed to fetch cart:", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchCart()
+  }, [fetchCart])
+
+  const addToCart = async (product: Product & { selectedSize?: string, selectedColor?: string }) => {
+    try {
+        const response = await api.post('/api/v1/cart/add', {
+            user_id: DEFAULT_USER_ID,
+            product_id: product.id,
+            quantity: 1,
+            size: product.selectedSize
+        })
+        const { items, summary } = mapBackendCartToFrontend(response.data)
+        dispatch({ type: 'SET_CART', payload: { items, summary } })
+        setIsCartOpen(true)
+    } catch (error) {
+        console.error("Failed to add to cart:", error)
+    }
   }
 
-  const removeFromCart = (id: number) => {
-    dispatch({ type: 'REMOVE_FROM_CART', payload: id })
+  const removeFromCart = async (id: number, size?: string) => {
+    try {
+        // If size is not provided, try to find it from current cart state
+        let targetSize = size;
+        if (!targetSize) {
+            const item = state.cart.find(i => i.id === id);
+            if (item) targetSize = item.selectedSize;
+        }
+
+        const response = await api.post('/api/v1/cart/remove', {
+            user_id: DEFAULT_USER_ID,
+            product_id: id,
+            size: targetSize
+        })
+        const { items, summary } = mapBackendCartToFrontend(response.data)
+        dispatch({ type: 'SET_CART', payload: { items, summary } })
+    } catch (error) {
+        console.error("Failed to remove from cart:", error)
+    }
   }
 
-  const updateQuantity = (id: number, quantity: number) => {
-    dispatch({ type: 'UPDATE_QUANTITY', payload: { id, quantity } })
+  const updateQuantity = async (id: number, quantity: number, size?: string) => {
+    try {
+        let targetSize = size;
+        if (!targetSize) {
+            const item = state.cart.find(i => i.id === id);
+            if (item) targetSize = item.selectedSize;
+        }
+
+        const response = await api.post('/api/v1/cart/update', {
+            user_id: DEFAULT_USER_ID,
+            product_id: id,
+            quantity: quantity,
+            size: targetSize
+        })
+        const { items, summary } = mapBackendCartToFrontend(response.data)
+        dispatch({ type: 'SET_CART', payload: { items, summary } })
+    } catch (error) {
+        console.error("Failed to update quantity:", error)
+    }
   }
 
   const clearCart = () => {
     dispatch({ type: 'CLEAR_CART' })
+    // TODO: Call API to clear cart if needed
   }
 
   const setCart = (data: { items: CartItem[], summary: CartState['summary'] }) => {
@@ -130,6 +193,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       updateQuantity, 
       clearCart, 
       setCart,
+      refreshCart: fetchCart,
       isCartOpen,
       openCart,
       closeCart

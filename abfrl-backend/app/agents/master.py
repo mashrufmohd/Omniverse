@@ -38,7 +38,7 @@ class MasterAgent:
             return self._handle_remove_from_cart(message, message_lower, chat_history, user_id)
         
         # CART MANAGEMENT: View cart
-        elif any(keyword in message_lower for keyword in ["show cart", "view cart", "my cart", "what's in my cart", "cart summary"]):
+        elif any(keyword in message_lower for keyword in ["show cart", "view cart", "my cart", "what's in my cart", "cart summary", "what is in cart", "whats in cart", "items in cart", "check cart", "whats there in cart"]):
             return self._handle_view_cart(message, chat_history, user_id)
         
         # CART MANAGEMENT: Apply discount code
@@ -67,7 +67,7 @@ class MasterAgent:
                 "name": p.name,
                 "price": p.price,
                 "description": p.description,
-                "imageUrl": p.image_url
+                "image_url": p.image_url
             } for p in db_products]
             
             # Use LLM to generate personalized response about the products
@@ -97,7 +97,7 @@ class MasterAgent:
                     "name": found_product.name,
                     "price": found_product.price,
                     "description": found_product.description,
-                    "imageUrl": found_product.image_url
+                    "image_url": found_product.image_url
                 }]
                 
                 prompt = f"The customer asked for details about {found_product.name} which costs ₹{found_product.price}. Description: {found_product.description}. Provide detailed information about this product including material, fit, styling tips, and care instructions in a friendly way."
@@ -186,9 +186,18 @@ class MasterAgent:
                 prompt = f"Customer added {quantity}x {found_product.name} (₹{found_product.price}) to their cart. Their cart now has {cart_summary['item_count']} items worth ₹{cart_summary['total']}. Confirm the addition and ask if they want to continue shopping or checkout."
                 response = self.llm.generate_response(prompt, chat_history)
                 
+                # Include the added product in the response so frontend can display it if needed
+                added_product_info = [{
+                    "id": found_product.id,
+                    "name": found_product.name,
+                    "price": found_product.price,
+                    "description": found_product.description,
+                    "image_url": found_product.image_url
+                }]
+
                 return {
                     "response": response,
-                    "products": [],
+                    "products": added_product_info,
                     "cart_summary": cart_summary
                 }
             else:

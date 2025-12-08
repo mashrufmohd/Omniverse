@@ -5,7 +5,7 @@ LLM client for interacting with Gemini using LangChain.
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.memory import ConversationBufferMemory
+# from langchain.memory import ConversationBufferMemory
 from typing import List
 
 from ..core.config import settings
@@ -48,9 +48,32 @@ class LLMClient:
             # Add current prompt
             messages.append(HumanMessage(content=prompt))
             
+            # Bind tools to the LLM - DISABLED for now as MasterAgent handles logic
+            # try:
+            #     from app.agents.tools import get_cart_items, search_products, check_inventory, get_loyalty_offers
+            #     tools = [get_cart_items, search_products, check_inventory, get_loyalty_offers]
+            #     llm_with_tools = self.llm.bind_tools(tools)
+            #     response = llm_with_tools.invoke(messages)
+            # except Exception as tool_error:
+            #     import traceback
+            #     traceback.print_exc()
+            #     print(f"Tool binding/invocation failed, falling back to standard LLM: {tool_error}")
+            #     # Fallback to standard invoke without tools
+            #     response = self.llm.invoke(messages)
+            
             response = self.llm.invoke(messages)
+
+            # Handle tool calls if any
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                # For now, we'll just return the tool call info or handle it simply
+                # In a full implementation, we'd execute the tool and feed the result back
+                # But since the MasterAgent handles logic manually, we might not need full tool execution loop here yet
+                pass
+
             return response.content
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"Error calling Gemini API: {e}")
             return "I'm here to help! However, I'm experiencing technical difficulties. Please try again or contact support."

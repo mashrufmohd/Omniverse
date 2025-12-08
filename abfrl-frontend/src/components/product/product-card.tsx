@@ -25,9 +25,9 @@ export function ProductCard({ product, onAction }: ProductCardProps) {
   return (
     <Card className="overflow-hidden max-w-sm bg-card border-2 border-border shadow-retro hover:shadow-retro-hover transition-all duration-300">
       <div className="relative w-full aspect-square border-b-2 border-border bg-muted">
-        {product.image_url ? (
+        {product.image_url || product.imageUrl ? (
           <Image
-            src={product.image_url}
+            src={product.image_url || product.imageUrl || ''}
             alt={product.name}
             fill
             className="object-cover"
@@ -47,7 +47,7 @@ export function ProductCard({ product, onAction }: ProductCardProps) {
         </div>
         
         <div className="flex items-center justify-between">
-          <p className="text-xl font-bold font-mono">${product.price.toFixed(2)}</p>
+          <p className="text-xl font-bold font-mono">₹{product.price.toFixed(2)}</p>
           {product.sizes && (
             <div className="flex gap-1">
               {product.sizes.slice(0, 3).map((size) => (

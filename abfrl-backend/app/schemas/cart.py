@@ -29,17 +29,24 @@ class DiscountCodeSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class ShippingAddress(BaseModel):
+    full_name: str
+    email: str
+    address_line1: str
+    address_line2: Optional[str] = None
+    city: str
+    state: str
+    zip_code: str
+    country: str = "India"
+    phone: str
+
 class PaymentInfo(BaseModel):
-    method_type: str  # credit_card, upi, wallet
-    card_number: Optional[str] = None
-    card_holder: Optional[str] = None
-    expiry_date: Optional[str] = None
-    cvv: Optional[str] = None
-    upi_id: Optional[str] = None
-    wallet_type: Optional[str] = None
-    save_card: bool = False
+    method_type: str  # credit_card, upi, wallet, stripe
+    # For Stripe, we might not need card details here as they are handled by Stripe Elements
+    payment_intent_id: Optional[str] = None
 
 class CheckoutRequest(BaseModel):
     user_id: str
+    shipping_address: ShippingAddress
     payment_info: PaymentInfo
     discount_code: Optional[str] = None

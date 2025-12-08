@@ -5,3 +5,4 @@ class Base(DeclarativeBase):
     # Automatic table naming (e.g., User -> user)
     # logic can be added here if needed
     pass
+

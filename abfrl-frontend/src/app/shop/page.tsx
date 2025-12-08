@@ -1,69 +1,32 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/header'
 import { ProductCard } from '@/components/product/product-card'
 import { Product } from '@/types'
 import Link from 'next/link'
-
-// Mock data for the shop page
-const products: Product[] = [
-  {
-    id: '1',
-    name: 'AeroStride Pro',
-    price: 149.99,
-    description: 'Lightweight running shoes with responsive foam.',
-    image_url: 'https://placehold.co/600x400/png?text=AeroStride+Pro',
-    sizes: ['7', '8', '9', '10', '11'],
-    colors: ['Black', 'Red', 'Blue']
-  },
-  {
-    id: '2',
-    name: 'Urban Trekker Hoodie',
-    price: 89.50,
-    description: 'Premium cotton blend hoodie for urban exploration.',
-    image_url: 'https://placehold.co/600x400/png?text=Urban+Trekker',
-    sizes: ['S', 'M', 'L', 'XL'],
-    colors: ['Grey', 'Black']
-  },
-  {
-    id: '3',
-    name: 'Classic Cap',
-    price: 29.99,
-    description: 'Minimalist cap with adjustable strap.',
-    image_url: 'https://placehold.co/600x400/png?text=Classic+Cap',
-    sizes: ['One Size'],
-    colors: ['Navy', 'Beige']
-  },
-  {
-    id: '4',
-    name: 'HydroFlow Bottle',
-    price: 24.99,
-    description: '24oz stainless steel insulated water bottle.',
-    image_url: 'https://placehold.co/600x400/png?text=HydroFlow',
-    sizes: ['24oz'],
-    colors: ['Silver', 'Matte Black']
-  },
-  {
-    id: '5',
-    name: 'TechRunner Shorts',
-    price: 45.00,
-    description: 'Breathable running shorts with phone pocket.',
-    image_url: 'https://placehold.co/600x400/png?text=TechRunner',
-    sizes: ['S', 'M', 'L', 'XL'],
-    colors: ['Black', 'Neon Green']
-  },
-  {
-    id: '6',
-    name: 'Smart Watch Strap',
-    price: 19.99,
-    description: 'Durable silicone strap for smart watches.',
-    image_url: 'https://placehold.co/600x400/png?text=Watch+Strap',
-    sizes: ['20mm', '22mm'],
-    colors: ['White', 'Black', 'Pink']
-  }
-]
+import api from '@/lib/api'
+import { API_ENDPOINTS } from '@/lib/constants'
 
 export default function ShopPage() {
+  const [products, setProducts] = useState<Product[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await api.get(API_ENDPOINTS.PRODUCTS)
+        setProducts(response.data)
+      } catch (error) {
+        console.error('Failed to fetch products:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchProducts()
+  }, [])
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -83,13 +46,21 @@ export default function ShopPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {products.map((product) => (
-            <Link key={product.id} href={`/product/${product.id}`} className="group">
-              <ProductCard product={product} />
-            </Link>
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-[400px] bg-muted animate-pulse rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {products.map((product) => (
+              <Link key={product.id} href={`/product/${product.id}`} className="group">
+                <ProductCard product={product} />
+              </Link>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   )
