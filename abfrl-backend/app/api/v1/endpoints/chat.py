@@ -48,17 +48,27 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         )
         db.add(user_msg)
         
+        # Ensure content is a string before saving to DB
+        response_content = result["response"]
+        if isinstance(response_content, list):
+            # If it's a list (e.g. from LangChain), convert to string or extract text
+            # For now, we'll just take the first text element if available, or str() it
+            try:
+                response_content = response_content[0].get("text", str(response_content))
+            except (IndexError, AttributeError):
+                response_content = str(response_content)
+
         ai_msg = Message(
             session_id=chat_session.id,
             role="ai",
-            content=result["response"],
+            content=response_content,
             timestamp=datetime.utcnow()
         )
         db.add(ai_msg)
         db.commit()
         
         return ChatResponse(
-            response=result["response"],
+            response=response_content,
             products=result.get("products", []),
             cart_summary=result.get("cart_summary")
         )

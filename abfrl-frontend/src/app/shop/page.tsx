@@ -1,98 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/header'
 import { ProductCard } from '@/components/product/product-card'
 import { Product } from '@/types'
 import Link from 'next/link'
 import { Minus, Plus, MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-
-// Mock data for the shop page
-const products: Product[] = [
-  {
-    id: 1,
-    name: 'Classic Oxford Shirt',
-    price: 79.99,
-    description: 'Premium cotton oxford shirt for a sharp look.',
-    image_url: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=800&q=80',
-    category: 'Tops',
-    sizes: ['S', 'M', 'L', 'XL'],
-    colors: ['White', 'Blue']
-  },
-  {
-    id: 2,
-    name: 'Urban Trekker Hoodie',
-    price: 89.50,
-    description: 'Premium cotton blend hoodie for urban exploration.',
-    image_url: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=800&q=80',
-    category: 'Tops',
-    sizes: ['S', 'M', 'L', 'XL'],
-    colors: ['Grey', 'Black']
-  },
-  {
-    id: 3,
-    name: 'Slim Fit Chinos',
-    price: 69.99,
-    description: 'Versatile chinos perfect for office or casual wear.',
-    image_url: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=800&q=80',
-    category: 'Bottoms',
-    sizes: ['30', '32', '34', '36'],
-    colors: ['Beige', 'Navy', 'Olive']
-  },
-  {
-    id: 4,
-    name: 'Merino Wool Sweater',
-    price: 120.00,
-    description: 'Soft and warm merino wool sweater.',
-    image_url: 'https://images.unsplash.com/photo-1614975058789-41316d0e2e9c?auto=format&fit=crop&w=800&q=80',
-    category: 'Tops',
-    sizes: ['S', 'M', 'L', 'XL'],
-    colors: ['Grey', 'Navy']
-  },
-  {
-    id: 5,
-    name: 'TechRunner Shorts',
-    price: 45.00,
-    description: 'Breathable running shorts with phone pocket.',
-    image_url: 'https://images.unsplash.com/photo-1591195853828-11db59a44f6b?auto=format&fit=crop&w=800&q=80',
-    category: 'Bottoms',
-    sizes: ['S', 'M', 'L'],
-    colors: ['Black', 'Neon Green']
-  },
-  {
-    id: 6,
-    name: 'Denim Jacket',
-    price: 110.00,
-    description: 'Classic denim jacket with a modern fit.',
-    image_url: 'https://images.unsplash.com/photo-1576871337632-b9aef4c17ab9?auto=format&fit=crop&w=800&q=80',
-    category: 'Outerwear',
-    sizes: ['S', 'M', 'L', 'XL'],
-    colors: ['Blue', 'Black']
-  },
-  {
-    id: 7,
-    name: 'Polo Shirt',
-    price: 55.00,
-    description: 'Breathable cotton pique polo shirt.',
-    image_url: 'https://images.unsplash.com/photo-1626557981101-aae6f84aa6ff?auto=format&fit=crop&w=800&q=80',
-    category: 'Tops',
-    sizes: ['S', 'M', 'L', 'XL'],
-    colors: ['White', 'Navy', 'Red']
-  },
-  {
-    id: 8,
-    name: 'Cargo Pants',
-    price: 85.00,
-    description: 'Durable cargo pants with multiple pockets.',
-    image_url: 'https://images.unsplash.com/photo-1517445312882-bc9910d016b7?auto=format&fit=crop&w=800&q=80',
-    category: 'Bottoms',
-    sizes: ['30', '32', '34', '36'],
-    colors: ['Green', 'Black', 'Khaki']
-  }
-]
+import api from '@/lib/api'
+import { API_ENDPOINTS } from '@/lib/constants'
 
 export default function ShopPage() {
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
   const [priceRange, setPriceRange] = useState([0, 200])
   const [selectedSizes, setSelectedSizes] = useState<string[]>([])
   const [selectedColors, setSelectedColors] = useState<string[]>([])
@@ -100,8 +20,23 @@ export default function ShopPage() {
   const [isSizeOpen, setIsSizeOpen] = useState(true)
   const [isColorOpen, setIsColorOpen] = useState(false)
 
-  const allSizes = Array.from(new Set(products.flatMap(p => p.sizes))).sort()
-  const allColors = Array.from(new Set(products.flatMap(p => p.colors))).sort()
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await api.get(API_ENDPOINTS.PRODUCTS)
+        setProducts(response.data)
+      } catch (error) {
+        console.error('Error fetching products:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchProducts()
+  }, [])
+
+  const allSizes = Array.from(new Set(products.flatMap(p => p.sizes || []))).sort()
+  const allColors = Array.from(new Set(products.flatMap(p => p.colors || []))).sort()
 
   const toggleSize = (size: string) => {
     setSelectedSizes(prev => 
@@ -144,6 +79,14 @@ export default function ShopPage() {
 
     return true
   })
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -296,10 +239,9 @@ export default function ShopPage() {
                       </span>
                     )}
                   </div>
-                  <div className="text-center space-y-1">
-                    <p className="text-xs text-gray-500">I&apos;m a Product</p>
-                    <h3 className="text-sm font-medium text-gray-900">{product.name}</h3>
-                    <p className="text-sm font-medium text-gray-900">${product.price.toFixed(2)}</p>
+                  <div className="text-center">
+                    <h3 className="text-sm text-gray-900 mb-1">{product.name}</h3>
+                    <p className="text-sm font-medium text-gray-500">${product.price.toFixed(2)}</p>
                   </div>
                 </Link>
               ))}
@@ -311,9 +253,8 @@ export default function ShopPage() {
       {/* Chat Button */}
       <div className="fixed bottom-6 right-6 z-50">
         <Link href="/chat">
-          <Button className="bg-[#C19A6B] hover:bg-[#a88659] text-white rounded-none px-6 py-6 shadow-lg flex items-center gap-2">
-            <MessageCircle className="w-5 h-5" />
-            <span>Let&apos;s Chat!</span>
+          <Button className="rounded-full w-14 h-14 bg-black hover:bg-gray-800 text-white shadow-lg flex items-center justify-center">
+            <MessageCircle className="w-6 h-6" />
           </Button>
         </Link>
       </div>

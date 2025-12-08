@@ -10,7 +10,7 @@ import { useCart } from '@/hooks/use-cart'
 export function ChatInterface() {
   const { messages, sendMessage, isLoading } = useChat()
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const { addToCart } = useCart()
+  const { addToCart, refreshCart } = useCart()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -18,7 +18,8 @@ export function ChatInterface() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+    refreshCart()
+  }, [messages, refreshCart])
 
   const handleSendMessage = async (content: string) => {
     await sendMessage(content)

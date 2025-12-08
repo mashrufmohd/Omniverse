@@ -5,44 +5,45 @@ import { Button } from '@/components/ui/button'
 import { Search, ChevronDown, MoreHorizontal, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import api from '@/lib/api'
+import { API_ENDPOINTS } from '@/lib/constants'
+
+interface OrderItem {
+  name: string
+  image: string
+  returnWindow?: string
+}
+
+interface Order {
+  id: string
+  date: string
+  total: number
+  shipTo: string
+  status: string
+  statusMessage: string
+  items: OrderItem[]
+}
 
 export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState('orders')
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Mock orders data based on the reference image structure
-  const orders = [
-    {
-      id: '112-0822160-5390023',
-      date: 'June 2, 2023',
-      total: 157.99,
-      shipTo: 'Mashruf Chowdhury',
-      status: 'Delivered June 5',
-      statusMessage: 'Your package was delivered. It was handed directly to a resident.',
-      items: [
-        {
-          name: 'SAMSUNG 980 PRO SSD 2TB PCIe NVMe Gen 4 Gaming M.2 Internal Solid State Drive',
-          image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=200&q=80', // Using a shirt image as placeholder or I should use tech? The user's shop is clothes now. I'll use clothes.
-          returnWindow: 'Return or replace items: Eligible through July 5, 2023'
-        }
-      ]
-    },
-    {
-      id: '112-9876543-2109876',
-      date: 'June 1, 2023',
-      total: 89.50,
-      shipTo: 'Mashruf Chowdhury',
-      status: 'Delivered June 7',
-      statusMessage: 'Your package was delivered. It was handed directly to a resident.',
-      items: [
-        {
-          name: 'Urban Trekker Hoodie - Premium Cotton Blend',
-          image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=200&q=80',
-          returnWindow: 'Return or replace items: Eligible through July 5, 2023'
-        }
-      ]
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const response = await api.get(API_ENDPOINTS.ORDERS)
+        setOrders(response.data)
+      } catch (error) {
+        console.error('Error fetching orders:', error)
+      } finally {
+        setLoading(false)
+      }
     }
-  ]
+
+    fetchOrders()
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -91,7 +92,16 @@ export default function OrdersPage() {
 
             {/* Orders List */}
             <div className="space-y-6">
-              {orders.map((order) => (
+              {loading ? (
+                <div className="flex justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900"></div>
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="text-center py-12 bg-white border border-gray-200 rounded-lg">
+                  <p className="text-gray-500">No orders found.</p>
+                </div>
+              ) : (
+                orders.map((order) => (
                 <div key={order.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                   {/* Order Header */}
                   <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between gap-4 text-sm text-gray-600">
@@ -178,7 +188,7 @@ export default function OrdersPage() {
                     </Link>
                   </div>
                 </div>
-              ))}
+              )))}
             </div>
           </div>
 

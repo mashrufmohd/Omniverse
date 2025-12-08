@@ -128,16 +128,22 @@ class CartService:
         # Apply discount
         discount = 0.0
         discount_applied = None
-        if discount_code:
+        
+        # Check if discount code is passed OR if it's stored in the cart
+        code_to_check = discount_code
+        if not code_to_check and hasattr(cart, 'applied_discount_code') and cart.applied_discount_code:
+            code_to_check = cart.applied_discount_code
+            
+        if code_to_check:
             discount_obj = db.query(DiscountCode).filter(
-                DiscountCode.code == discount_code.upper(),
+                DiscountCode.code == code_to_check.upper(),
                 DiscountCode.active == True
             ).first()
             
             if discount_obj:
                 if subtotal >= discount_obj.min_purchase:
                     discount = subtotal * (discount_obj.discount_percent / 100)
-                    discount_applied = discount_code.upper()
+                    discount_applied = code_to_check.upper()
         
         total = subtotal + shipping - discount
         

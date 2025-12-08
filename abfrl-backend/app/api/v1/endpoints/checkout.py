@@ -39,9 +39,21 @@ async def checkout(request: CheckoutRequest, db: Session = Depends(get_db)):
         order = Order(
             user_id=request.user_id,
             total_amount=cart_summary["total"],
-            status="pending",
+            status="confirmed", # Assuming payment is done if we reach here via Stripe flow
             payment_method=request.payment_info.method_type,
-            shipping_address=request.shipping_address,
+            payment_intent_id=request.payment_info.payment_intent_id,
+            
+            # Shipping Details
+            shipping_name=request.shipping_address.full_name,
+            shipping_email=request.shipping_address.email,
+            shipping_phone=request.shipping_address.phone,
+            shipping_address_line1=request.shipping_address.address_line1,
+            shipping_address_line2=request.shipping_address.address_line2,
+            shipping_city=request.shipping_address.city,
+            shipping_state=request.shipping_address.state,
+            shipping_zip=request.shipping_address.zip_code,
+            shipping_country=request.shipping_address.country,
+            
             created_at=datetime.utcnow()
         )
         db.add(order)
