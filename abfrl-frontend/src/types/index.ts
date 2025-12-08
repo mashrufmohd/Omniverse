@@ -5,6 +5,11 @@ export interface Product {
   description?: string
   imageUrl?: string
   image_url?: string
+  category?: string
+  sizes?: string[]
+  colors?: string[]
+  rating?: number
+  reviews?: number
 }
 
 export interface Message {
@@ -26,6 +31,7 @@ export interface ChatMessage {
 export interface CartItem extends Product {
   quantity: number
   selectedSize?: string
+  selectedColor?: string
 }
 
 export interface ChatResponse {

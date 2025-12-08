@@ -28,9 +28,9 @@ export default function CartPage() {
           </div>
           <h1 className="text-3xl font-bold font-syne">Your cart is empty</h1>
           <p className="text-gray-600 font-mono max-w-md mx-auto">
-            Looks like you haven't added anything to your cart yet.
+            Looks like you haven&apos;t added anything to your cart yet.
           </p>
-          <Link href="/shop">
+          <Link href="/chat">
             <Button className="bg-black text-white hover:bg-gray-800 border-2 border-black shadow-retro px-8 py-6 text-lg font-mono">
               Start Shopping
             </Button>

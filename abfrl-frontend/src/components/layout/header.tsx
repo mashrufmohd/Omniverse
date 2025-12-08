@@ -33,8 +33,8 @@ export function Header() {
             <Link href="/orders" className="text-sm font-bold uppercase tracking-wide hover:text-primary transition-colors">
               Orders
             </Link>
-            <Link href="/help" className="text-sm font-bold uppercase tracking-wide hover:text-primary transition-colors">
-              Help
+            <Link href="/documentation" className="text-sm font-bold uppercase tracking-wide hover:text-primary transition-colors">
+              Docs
             </Link>
             
             <div className="flex items-center gap-2 ml-2">

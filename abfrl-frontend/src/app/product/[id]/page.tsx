@@ -25,7 +25,7 @@ async function getProduct(id: string): Promise<Product> {
   }
 
   return {
-    id,
+    id: parseInt(id),
     name: names[id] || 'AeroStride Pro',
     price: 149.99,
     description: 'Experience the perfect blend of performance and comfort. Engineered for modern life, this product delivers unmatched quality and style. The premium materials ensure durability while maintaining a lightweight feel.',
