@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthContext } from '@/context/auth-context'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,18 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [signupComplete, setSignupComplete] = useState(false)
+
+  // Redirect to login after successful signup
+  useEffect(() => {
+    if (signupComplete) {
+      console.log('Signup complete, redirecting to login...')
+      // Show success message and redirect to login
+      setTimeout(() => {
+        router.push('/login')
+      }, 1000)
+    }
+  }, [signupComplete, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,14 +44,19 @@ export default function SignupPage() {
     }
 
     setLoading(true)
+    console.log('Starting signup process...')
 
     try {
+      console.log('Calling signup function...')
       await signup(email, password, name)
-      router.push('/chat')
+      console.log('Signup completed successfully')
+      setSignupComplete(true)
+      // Will redirect to login via useEffect
     } catch (err: any) {
+      console.error('Signup error:', err)
       setError(err.message || 'Failed to create account')
-    } finally {
       setLoading(false)
+      setSignupComplete(false)
     }
   }
 
@@ -136,10 +153,10 @@ export default function SignupPage() {
 
           <Button
             type="submit"
-            disabled={loading}
+            disabled={loading || signupComplete}
             className="w-full bg-[#FF5E5B] hover:bg-[#00CCBF] text-white border-2 border-black shadow-retro hover:shadow-retro-hover transition-all py-6 font-bold uppercase tracking-wide"
           >
-            {loading ? 'Creating Account...' : 'Create Account'}
+            {signupComplete ? 'Success! Redirecting...' : loading ? 'Creating Account...' : 'Create Account'}
           </Button>
         </form>
 

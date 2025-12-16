@@ -8,7 +8,7 @@ import { useChat } from '@/hooks/use-chat'
 import { useCart } from '@/hooks/use-cart'
 
 export function ChatInterface() {
-  const { messages, sendMessage, isLoading } = useChat()
+  const { messages, sendMessage, isLoading, isStreaming, streamingMessageId } = useChat()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { addToCart, refreshCart } = useCart()
 
@@ -49,6 +49,7 @@ export function ChatInterface() {
             key={index} 
             message={msg} 
             onAction={handleAction}
+            isStreaming={isStreaming && msg.id === streamingMessageId}
           />
         ))}
         {isLoading && (
@@ -62,7 +63,7 @@ export function ChatInterface() {
         )}
         <div ref={messagesEndRef} className="h-4" />
       </div>
-      <ChatInput onSend={handleSendMessage} isLoading={isLoading} />
+      <ChatInput onSend={handleSendMessage} isLoading={isLoading || isStreaming} />
     </div>
   )
 }

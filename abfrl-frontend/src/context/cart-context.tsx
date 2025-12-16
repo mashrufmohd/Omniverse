@@ -12,7 +12,7 @@ interface CartState {
     shipping: number
     discount: number
     total: number
-    discountCode?: string | null
+    discountCode?: string
   }
 }
 
@@ -23,7 +23,7 @@ type CartAction =
 const cartReducer = (state: CartState, action: CartAction): CartState => {
   switch (action.type) {
     case 'CLEAR_CART':
-      return { ...state, cart: [], summary: { subtotal: 0, shipping: 0, discount: 0, total: 0, discountCode: null } }
+      return { ...state, cart: [], summary: { subtotal: 0, shipping: 0, discount: 0, total: 0, discountCode: undefined } }
     case 'SET_CART':
       return { ...state, cart: action.payload.items, summary: action.payload.summary }
     default:
@@ -48,7 +48,7 @@ const CartContext = createContext<{
 export function CartProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, { 
     cart: [], 
-    summary: { subtotal: 0, shipping: 0, discount: 0, total: 0, discountCode: null } 
+    summary: { subtotal: 0, shipping: 0, discount: 0, total: 0, discountCode: undefined } 
   })
   const [isCartOpen, setIsCartOpen] = useState(false)
   const { user } = useAuthContext()

@@ -19,23 +19,38 @@ export interface UserProfile {
 export const authService = {
   // Sign up new user
   async signUp(email: string, password: string, displayName: string) {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+    try {
+      console.log('Creating user with email:', email);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      console.log('User created with UID:', user.uid);
 
-    // Update display name
-    await updateProfile(user, { displayName });
+      // Update display name
+      console.log('Updating profile with display name...');
+      await updateProfile(user, { displayName });
+      console.log('Profile updated successfully');
 
-    // Create user profile in Firestore
-    const userProfile: UserProfile = {
-      uid: user.uid,
-      email: user.email!,
-      displayName,
-      createdAt: new Date(),
-    };
+      // Create user profile in Firestore
+      const userProfile: UserProfile = {
+        uid: user.uid,
+        email: user.email!,
+        displayName,
+        createdAt: new Date(),
+      };
 
-    await setDoc(doc(db, 'users', user.uid), userProfile);
+      console.log('Saving user profile to Firestore...');
+      await setDoc(doc(db, 'users', user.uid), userProfile);
+      console.log('User profile saved to Firestore');
 
-    return user;
+      return user;
+    } catch (error: any) {
+      console.error('Sign up error:', error);
+      // If user was created but profile update failed, still return success
+      if (error.code === 'auth/email-already-in-use') {
+        throw new Error('Email already in use');
+      }
+      throw new Error(error.message || 'Failed to create account');
+    }
   },
 
   // Sign in existing user

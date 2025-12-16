@@ -3,6 +3,7 @@
 import { useCart } from '@/hooks/use-cart'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { useRouter } from 'next/navigation'
 
 interface CartDrawerProps {
   isOpen: boolean
@@ -11,6 +12,7 @@ interface CartDrawerProps {
 
 export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const { cart, summary, removeFromCart, clearCart } = useCart()
+  const router = useRouter()
 
   if (!isOpen) return null
 
@@ -73,7 +75,13 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
               <span>Total</span>
               <span>₹{summary.total}</span>
             </div>
-            <Button className="w-full mt-4" onClick={clearCart}>
+            <Button 
+              className="w-full mt-4" 
+              onClick={() => {
+                onClose()
+                router.push('/checkout')
+              }}
+            >
               Proceed to Checkout
             </Button>
           </div>

@@ -4,13 +4,15 @@ import { Message } from '@/types'
 import { cn } from '@/lib/utils'
 import { ChatProductCard } from '@/components/chat/chat-product-card'
 import { User, Terminal } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 
 interface ChatMessageProps {
   message: Message
   onAction?: (action: string, data?: any) => void
+  isStreaming?: boolean
 }
 
-export function ChatMessage({ message, onAction }: ChatMessageProps) {
+export function ChatMessage({ message, onAction, isStreaming }: ChatMessageProps) {
   const isUser = message.sender === 'user'
 
   return (
@@ -37,7 +39,29 @@ export function ChatMessage({ message, onAction }: ChatMessageProps) {
             ? "bg-blue-600 text-white" 
             : "bg-white text-black"
         )}>
-          <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>
+          {isUser ? (
+            <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>
+          ) : (
+            <div className="markdown-content">
+              <ReactMarkdown
+                components={{
+                  p: ({ children }) => <p className="my-2 leading-relaxed">{children}</p>,
+                  strong: ({ children }) => <strong className="font-bold text-black">{children}</strong>,
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                  ul: ({ children }) => <ul className="my-2 ml-4 list-disc space-y-1">{children}</ul>,
+                  ol: ({ children }) => <ol className="my-2 ml-4 list-decimal space-y-1">{children}</ol>,
+                  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                  h1: ({ children }) => <h1 className="text-xl font-bold my-3">{children}</h1>,
+                  h2: ({ children }) => <h2 className="text-lg font-bold my-2">{children}</h2>,
+                  h3: ({ children }) => <h3 className="text-base font-bold my-2">{children}</h3>,
+                  code: ({ children }) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm">{children}</code>,
+                }}
+              >
+                {message.text}
+              </ReactMarkdown>
+              {isStreaming && <span className="inline-block w-2 h-5 bg-black animate-pulse ml-1 align-middle"></span>}
+            </div>
+          )}
         </div>
 
         {message.products && message.products.length > 0 && (

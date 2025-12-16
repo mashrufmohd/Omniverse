@@ -10,6 +10,8 @@ import { chatService } from '@/services/chat.service'
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
   const cartContext = useContext(CartContext)
   const { user } = useAuthContext()
 
@@ -57,83 +59,117 @@ export function useChat() {
       console.log('Note: Message not saved to history (offline):', error.message)
     })
 
+    // Create placeholder AI message for streaming
+    const aiMessageId = (Date.now() + 1).toString()
+    const aiMessage: Message = {
+      id: aiMessageId,
+      text: '',
+      sender: 'ai',
+      timestamp: new Date(),
+      products: [],
+    }
+    setMessages(prev => [...prev, aiMessage])
+    setStreamingMessageId(aiMessageId)
+    setIsStreaming(true)
+    setIsLoading(false)
+
     try {
-      console.log('Sending message to backend:', { user_id: user.uid, message: text })
-      const response = await api.post('/api/v1/chat/', {
-        user_id: user.uid,
-        message: text,
-        channel: 'web'
-      })
-      console.log('Received response:', response.data)
+      console.log('Streaming message to backend:', { user_id: user.uid, message: text })
+      
+      let fullText = ''
+      let finalProducts: any[] = []
+      let finalCartSummary: any = null
 
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: response.data.response,
-        sender: 'ai',
-        timestamp: new Date(),
-        products: response.data.products || [],
-      }
-      setMessages(prev => [...prev, aiMessage])
+      await chatService.streamChatResponse(
+        user.uid,
+        text,
+        // onChunk - append text as it streams
+        (chunk: string) => {
+          fullText += chunk
+          setMessages(prev => prev.map(msg => 
+            msg.id === aiMessageId 
+              ? { ...msg, text: fullText }
+              : msg
+          ))
+        },
+        // onComplete - handle final data
+        (data: any) => {
+          console.log('Stream completed with data:', data)
+          finalProducts = data.products || []
+          finalCartSummary = data.cart_summary
+          
+          // Update message with products
+          setMessages(prev => prev.map(msg => 
+            msg.id === aiMessageId 
+              ? { ...msg, products: finalProducts }
+              : msg
+          ))
 
-      // Save AI message to Firestore (non-blocking)
-      chatService.saveMessage(user.uid, {
-        userId: user.uid,
-        text: response.data.response,
-        sender: 'ai',
-        products: response.data.products || [],
-      }).catch(error => {
-        console.log('Note: AI message not saved to history (offline):', error.message)
-      })
+          // Save AI message to Firestore
+          chatService.saveMessage(user.uid!, {
+            userId: user.uid!,
+            text: fullText,
+            sender: 'ai',
+            products: finalProducts,
+          }).catch(error => {
+            console.log('Note: AI message not saved to history (offline):', error.message)
+          })
 
-      // Update cart if summary is present
-      if (response.data.cart_summary && cartContext) {
-        const backendItems = response.data.cart_summary.items
-        const frontendItems: CartItem[] = backendItems.map((item: any) => {
-          const cartItem: any = {
-            id: item.product_id,
-            name: item.product_name,
-            price: item.price,
-            quantity: item.quantity,
+          // Update cart if summary is present
+          if (finalCartSummary && cartContext) {
+            const backendItems = finalCartSummary.items
+            const frontendItems: CartItem[] = backendItems.map((item: any) => {
+              const cartItem: any = {
+                id: item.product_id,
+                name: item.product_name,
+                price: item.price,
+                quantity: item.quantity,
+              }
+              if (item.image_url) {
+                cartItem.imageUrl = item.image_url
+                cartItem.image_url = item.image_url
+              }
+              if (item.description) {
+                cartItem.description = item.description
+              }
+              if (item.size) {
+                cartItem.selectedSize = item.size
+              }
+              return cartItem
+            })
+            
+            const summary: any = {
+              subtotal: finalCartSummary.subtotal,
+              shipping: finalCartSummary.shipping,
+              discount: finalCartSummary.discount,
+              total: finalCartSummary.total,
+            }
+            if (finalCartSummary.discount_code) {
+              summary.discountCode = finalCartSummary.discount_code
+            }
+            
+            cartContext.setCart({ items: frontendItems, summary })
+            cartContext.openCart()
           }
-          // Only add optional fields if they have values
-          if (item.image_url) {
-            cartItem.imageUrl = item.image_url
-            cartItem.image_url = item.image_url
-          }
-          if (item.description) {
-            cartItem.description = item.description
-          }
-          if (item.size) {
-            cartItem.selectedSize = item.size
-          }
-          return cartItem
-        })
-        
-        const summary: any = {
-          subtotal: response.data.cart_summary.subtotal,
-          shipping: response.data.cart_summary.shipping,
-          discount: response.data.cart_summary.discount,
-          total: response.data.cart_summary.total,
+
+          setIsStreaming(false)
+          setStreamingMessageId(null)
+        },
+        // onError
+        (error: string) => {
+          console.error('Streaming error:', error)
+          setMessages(prev => prev.map(msg => 
+            msg.id === aiMessageId 
+              ? { ...msg, text: fullText || 'Sorry, I encountered an error processing your message.' }
+              : msg
+          ))
+          setIsStreaming(false)
+          setStreamingMessageId(null)
         }
-        // Only add discount code if it exists
-        if (response.data.cart_summary.discount_code) {
-          summary.discountCode = response.data.cart_summary.discount_code
-        }
-        
-        cartContext.setCart({ items: frontendItems, summary })
-        
-        // Open cart drawer to show updated items
-        cartContext.openCart()
-      }
+      )
 
     } catch (error: any) {
       console.error('Error sending message:', error)
-      console.error('Error details:', {
-        message: error?.message,
-        response: error?.response?.data,
-        status: error?.response?.status,
-        code: error?.code
-      })
       
       let errorText = 'Sorry, I encountered an error. '
       if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
@@ -146,15 +182,13 @@ export function useChat() {
         errorText = `Error: ${error.message}`
       }
       
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: errorText,
-        sender: 'ai',
-        timestamp: new Date(),
-      }
-      setMessages(prev => [...prev, errorMessage])
-    } finally {
-      setIsLoading(false)
+      setMessages(prev => prev.map(msg => 
+        msg.id === aiMessageId 
+          ? { ...msg, text: errorText }
+          : msg
+      ))
+      setIsStreaming(false)
+      setStreamingMessageId(null)
     }
   }, [cartContext, user?.uid])
 
@@ -169,5 +203,12 @@ export function useChat() {
     }
   }, [user?.uid])
 
-  return { messages, sendMessage, isLoading, clearHistory }
+  return { 
+    messages, 
+    sendMessage, 
+    isLoading, 
+    isStreaming, 
+    streamingMessageId,
+    clearHistory 
+  }
 }
