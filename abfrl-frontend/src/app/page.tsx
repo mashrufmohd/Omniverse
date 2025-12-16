@@ -1,11 +1,15 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { Header } from '@/components/layout/header'
 import { Button } from '@/components/ui/button'
 import { Star, Grid, Globe, Zap } from 'lucide-react'
+import { useAuthContext } from '@/context/auth-context'
 
 export default function Home() {
+  const { user } = useAuthContext()
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
@@ -28,13 +32,18 @@ export default function Home() {
               </p>
 
               <div className="mt-8 flex flex-col sm:flex-row gap-4">
-                <Link href="/chat">
-                  <Button className="bg-black text-white px-6 py-4 font-mono shadow-retro border-2 border-black">
+                <Link href={user ? "/chat" : "/login"}>
+                  <Button className="bg-black text-white px-6 py-4 font-mono shadow-retro border-2 border-black hover:bg-[#FF5E5B] transition-all">
                     Start Shopping
                   </Button>
                 </Link>
+                <Link href="/signup">
+                  <Button className="bg-[#FF5E5B] text-white px-6 py-4 font-mono shadow-retro border-2 border-black hover:bg-[#00CCBF] transition-all">
+                    Sign Up Free
+                  </Button>
+                </Link>
                 <Link href="/documentation">
-                  <Button variant="outline" className="px-6 py-4 font-mono border-2 border-border">
+                  <Button variant="outline" className="px-6 py-4 font-mono border-2 border-border hover:bg-accent transition-all">
                     Contact Sales
                   </Button>
                 </Link>
@@ -42,10 +51,17 @@ export default function Home() {
 
               <div className="mt-8 flex flex-wrap gap-4 items-center text-sm text-muted-foreground">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border-2 border-border shadow-retro">FD</div>
+                  <div className="relative w-10 h-10 bg-white rounded-full overflow-hidden border-2 border-border shadow-retro">
+                    <Image 
+                      src="/images/logo.jpg" 
+                      alt="ABFRL Logo" 
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
                   <div>
-                    <div className="font-bold">Used by teams</div>
-                    <div className="text-xs">1000+ customers</div>
+                    <div className="font-bold">Trusted by</div>
+                    <div className="text-xs">ABFRL & Partners</div>
                   </div>
                 </div>
               </div>

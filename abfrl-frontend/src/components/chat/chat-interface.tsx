@@ -34,8 +34,16 @@ export function ChatInterface() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+    <div className="flex flex-col h-full bg-[#f0f0f0] relative overflow-hidden">
+      {/* Retro Grid Background */}
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+           style={{ 
+             backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)', 
+             backgroundSize: '20px 20px' 
+           }} 
+      />
+      
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-8 scroll-smooth relative z-10">
         {messages.map((msg, index) => (
           <ChatMessage 
             key={index} 
@@ -44,13 +52,15 @@ export function ChatInterface() {
           />
         ))}
         {isLoading && (
-          <div className="flex items-center gap-2 p-4 text-muted-foreground animate-pulse">
-            <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div className="flex items-center gap-3 p-4 max-w-[120px] bg-white border-2 border-black shadow-retro ml-12 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex space-x-2">
+              <div className="w-2 h-2 bg-black animate-bounce [animation-delay:-0.3s]"></div>
+              <div className="w-2 h-2 bg-black animate-bounce [animation-delay:-0.15s]"></div>
+              <div className="w-2 h-2 bg-black animate-bounce"></div>
+            </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} className="h-4" />
       </div>
       <ChatInput onSend={handleSendMessage} isLoading={isLoading} />
     </div>

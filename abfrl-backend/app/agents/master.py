@@ -29,12 +29,18 @@ class MasterAgent:
         if any(keyword in message_lower for keyword in ["clear history", "new chat", "start over", "reset chat"]):
             return self._handle_clear_history(user_id)
         
-        # CART MANAGEMENT: Add to cart
-        if any(keyword in message_lower for keyword in ["add to cart", "add this", "add that", "i want to buy", "i'll take"]):
+        # CART MANAGEMENT: Add to cart - Enhanced keywords
+        if any(keyword in message_lower for keyword in [
+            "add to cart", "add this", "add that", "add it", "add the",
+            "i want to buy", "i'll take", "i will take", "buy this", "buy that",
+            "purchase this", "purchase that", "get this", "get that",
+            "put in cart", "add in cart", "cart add",
+            "i want this", "i want that", "i need this", "i need that"
+        ]):
             return self._handle_add_to_cart(message, message_lower, chat_history, user_id)
         
         # CART MANAGEMENT: Remove from cart
-        elif any(keyword in message_lower for keyword in ["remove from cart", "delete from cart", "remove this", "take out"]):
+        elif any(keyword in message_lower for keyword in ["remove from cart", "delete from cart", "remove this", "remove that", "take out"]):
             return self._handle_remove_from_cart(message, message_lower, chat_history, user_id)
         
         # CART MANAGEMENT: View cart
@@ -140,12 +146,13 @@ class MasterAgent:
         # Sort products by name length descending to match longest name first
         sorted_products = sorted(all_products, key=lambda p: len(p.name), reverse=True)
         
+        # Method 1: Exact product name match
         for product in sorted_products:
             if product.name.lower() in message_lower:
                 found_product = product
                 break
         
-        # If no exact match, try word matching but be stricter
+        # Method 2: Try word matching
         if not found_product:
             for product in sorted_products:
                 product_words = product.name.lower().split()
@@ -158,12 +165,26 @@ class MasterAgent:
                     found_product = product
                     break
         
+        # Method 3: Try to extract product ID if mentioned
         if not found_product:
-            # Try to extract product ID if mentioned
-            id_match = re.search(r'product (\d+)|id (\d+)', message_lower)
+            id_match = re.search(r'product (\d+)|id[:\s]*(\d+)|#(\d+)', message_lower)
             if id_match:
-                product_id = int(id_match.group(1) or id_match.group(2))
+                product_id = int(id_match.group(1) or id_match.group(2) or id_match.group(3))
                 found_product = self.db.query(Product).filter(Product.id == product_id).first()
+        
+        # Method 4: Check recent chat history for product context
+        if not found_product and chat_history:
+            # Look at the last AI message to see if it mentioned products
+            for msg in reversed(chat_history[-3:]):  # Check last 3 messages
+                if msg.get("role") == "ai":
+                    content = msg.get("content", "").lower()
+                    # Extract product names from AI's response
+                    for product in sorted_products:
+                        if product.name.lower() in content:
+                            found_product = product
+                            break
+                    if found_product:
+                        break
         
         if found_product:
             # Extract quantity if mentioned
@@ -203,9 +224,22 @@ class MasterAgent:
             else:
                 return {"response": result["message"], "products": [], "cart_summary": None}
         else:
-            prompt = f"Customer wants to add something to cart but I couldn't identify the product in: '{message}'. Ask them to specify the product name exactly as shown."
+            # Show available products if we couldn't identify what they want
+            sample_products = self.db.query(Product).limit(5).all()
+            product_list = ", ".join([p.name for p in sample_products])
+            prompt = f"Customer wants to add something to cart but I couldn't identify which product from: '{message}'. Here are some products I have: {product_list}. Ask them to specify which product they'd like, or say 'show me [category]' to browse."
             response = self.llm.generate_response(prompt, chat_history)
-            return {"response": response, "products": [], "cart_summary": None}
+            
+            # Return products to help them choose
+            products = [{
+                "id": p.id,
+                "name": p.name,
+                "price": p.price,
+                "description": p.description,
+                "image_url": p.image_url
+            } for p in sample_products]
+            
+            return {"response": response, "products": products, "cart_summary": None}
     
     def _handle_remove_from_cart(self, message: str, message_lower: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
         """Handle removing items from cart"""

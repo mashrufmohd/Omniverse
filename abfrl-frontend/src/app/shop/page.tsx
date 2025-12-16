@@ -9,16 +9,15 @@ import { Minus, Plus, MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import api from '@/lib/api'
 import { API_ENDPOINTS } from '@/lib/constants'
+import { ProtectedRoute } from '@/components/auth/protected-route'
 
 export default function ShopPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
-  const [priceRange, setPriceRange] = useState([0, 200])
+  const [priceRange, setPriceRange] = useState([0, 5000])
   const [selectedSizes, setSelectedSizes] = useState<string[]>([])
-  const [selectedColors, setSelectedColors] = useState<string[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>('All Products')
   const [isSizeOpen, setIsSizeOpen] = useState(true)
-  const [isColorOpen, setIsColorOpen] = useState(false)
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -36,21 +35,12 @@ export default function ShopPage() {
   }, [])
 
   const allSizes = Array.from(new Set(products.flatMap(p => p.sizes || []))).sort()
-  const allColors = Array.from(new Set(products.flatMap(p => p.colors || []))).sort()
 
   const toggleSize = (size: string) => {
     setSelectedSizes(prev => 
       prev.includes(size) 
         ? prev.filter(s => s !== size)
         : [...prev, size]
-    )
-  }
-
-  const toggleColor = (color: string) => {
-    setSelectedColors(prev => 
-      prev.includes(color) 
-        ? prev.filter(c => c !== color)
-        : [...prev, color]
     )
   }
 
@@ -71,12 +61,6 @@ export default function ShopPage() {
       if (!hasSize) return false
     }
 
-    // Filter by color if any selected
-    if (selectedColors.length > 0) {
-      const hasColor = product.colors?.some(c => selectedColors.includes(c))
-      if (!hasColor) return false
-    }
-
     return true
   })
 
@@ -89,8 +73,9 @@ export default function ShopPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5]">
-      <Header />
+    <ProtectedRoute>
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <Header />
       
       <main className="container mx-auto px-6 py-12">
         <div className="flex flex-col lg:flex-row gap-12">
@@ -134,14 +119,14 @@ export default function ShopPage() {
                     <input 
                       type="range" 
                       min="0" 
-                      max="200" 
+                      max="5000" 
                       value={priceRange[1]}
                       onChange={(e) => setPriceRange([0, parseInt(e.target.value)])}
                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
                     />
                     <div className="flex justify-between mt-2 text-xs font-medium text-gray-600">
-                      <span>${priceRange[0]}</span>
-                      <span>${priceRange[1]}</span>
+                      <span>₹{priceRange[0]}</span>
+                      <span>₹{priceRange[1]}</span>
                     </div>
                   </div>
                 </div>
@@ -151,40 +136,6 @@ export default function ShopPage() {
                   <div 
                     className="flex items-center justify-between cursor-pointer mb-4"
                     onClick={() => setIsColorOpen(!isColorOpen)}
-                  >
-                    <span className="text-sm font-medium text-gray-700">Color</span>
-                    {isColorOpen ? (
-                      <Minus className="w-4 h-4 text-gray-400" />
-                    ) : (
-                      <Plus className="w-4 h-4 text-gray-400" />
-                    )}
-                  </div>
-                  
-                  {isColorOpen && (
-                    <div className="space-y-2">
-                      {allColors.map(color => (
-                        <div key={color} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id={`color-${color}`}
-                            checked={selectedColors.includes(color)}
-                            onChange={() => toggleColor(color)}
-                            className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black"
-                          />
-                          <label htmlFor={`color-${color}`} className="ml-2 text-sm text-gray-600 cursor-pointer select-none">
-                            {color}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Size Filter */}
-                <div className="border-b border-gray-200 pb-6">
-                  <div 
-                    className="flex items-center justify-between cursor-pointer mb-4"
-                    onClick={() => setIsSizeOpen(!isSizeOpen)}
                   >
                     <span className="text-sm font-medium text-gray-700">Size</span>
                     {isSizeOpen ? (
@@ -241,7 +192,7 @@ export default function ShopPage() {
                   </div>
                   <div className="text-center">
                     <h3 className="text-sm text-gray-900 mb-1">{product.name}</h3>
-                    <p className="text-sm font-medium text-gray-500">${product.price.toFixed(2)}</p>
+                    <p className="text-sm font-medium text-gray-500">₹{product.price.toFixed(2)}</p>
                   </div>
                 </Link>
               ))}
@@ -259,5 +210,6 @@ export default function ShopPage() {
         </Link>
       </div>
     </div>
+    </ProtectedRoute>
   )
 }

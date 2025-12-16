@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useReducer, ReactNode, useState, useEffect, useCallback } from 'react'
 import { Product, CartItem } from '@/types'
-import api from '@/lib/api'
-import { DEFAULT_USER_ID } from '@/lib/constants'
+import { useAuthContext } from '@/context/auth-context'
+import { cartFirestoreService } from '@/services/cart-firestore.service'
 
 interface CartState {
   cart: CartItem[]
@@ -17,35 +17,13 @@ interface CartState {
 }
 
 type CartAction =
-  | { type: 'ADD_TO_CART'; payload: Product & { selectedSize?: string, selectedColor?: string } }
-  | { type: 'REMOVE_FROM_CART'; payload: number }
-  | { type: 'UPDATE_QUANTITY'; payload: { id: number; quantity: number } }
   | { type: 'CLEAR_CART' }
   | { type: 'SET_CART'; payload: { items: CartItem[], summary: CartState['summary'] } }
 
-const calculateSummary = (cart: CartItem[]) => {
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  return {
-    subtotal,
-    shipping: 0,
-    discount: 0,
-    total: subtotal,
-    discountCode: null
-  }
-}
-
 const cartReducer = (state: CartState, action: CartAction): CartState => {
   switch (action.type) {
-    case 'ADD_TO_CART':
-      // Optimistic update logic (can be kept or removed if we rely solely on API)
-      // For now, we'll rely on SET_CART from API response to ensure sync
-      return state
-    case 'REMOVE_FROM_CART':
-      return state
-    case 'UPDATE_QUANTITY':
-      return state
     case 'CLEAR_CART':
-      return { ...state, cart: [], summary: calculateSummary([]) }
+      return { ...state, cart: [], summary: { subtotal: 0, shipping: 0, discount: 0, total: 0, discountCode: null } }
     case 'SET_CART':
       return { ...state, cart: action.payload.items, summary: action.payload.summary }
     default:
@@ -67,64 +45,98 @@ const CartContext = createContext<{
   closeCart: () => void
 } | null>(null)
 
-const mapBackendCartToFrontend = (data: any) => {
-  const backendItems = data.items
-  const frontendItems: CartItem[] = backendItems.map((item: any) => ({
-    id: item.product_id,
-    name: item.product_name,
-    price: item.price,
-    quantity: item.quantity,
-    imageUrl: item.image_url,
-    image_url: item.image_url,
-    description: '',
-    selectedSize: item.size
-  }))
-  
-  const summary = {
-    subtotal: data.subtotal,
-    shipping: data.shipping,
-    discount: data.discount,
-    total: data.total,
-    discountCode: data.discount_code
-  }
-  return { items: frontendItems, summary }
-}
-
 export function CartProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, { 
     cart: [], 
     summary: { subtotal: 0, shipping: 0, discount: 0, total: 0, discountCode: null } 
   })
   const [isCartOpen, setIsCartOpen] = useState(false)
+  const { user } = useAuthContext()
+
+  useEffect(() => {
+    if (!user?.uid) {
+      dispatch({ type: 'CLEAR_CART' })
+      return
+    }
+
+    const loadCart = async () => {
+      try {
+        const cart = await cartFirestoreService.getCart(user.uid)
+        if (cart) {
+          dispatch({ type: 'SET_CART', payload: { items: cart.items, summary: cart.summary } })
+        } else {
+          await cartFirestoreService.saveCart(user.uid, {
+            items: [],
+            summary: { subtotal: 0, shipping: 0, discount: 0, total: 0 },
+            updatedAt: new Date()
+          })
+        }
+      } catch (error) {
+        console.error("Failed to load cart:", error)
+      }
+    }
+
+    loadCart()
+
+    const unsubscribe = cartFirestoreService.subscribeToCart(user.uid, (cart) => {
+      if (cart) {
+        dispatch({ type: 'SET_CART', payload: { items: cart.items, summary: cart.summary } })
+      }
+    })
+
+    return () => unsubscribe()
+  }, [user?.uid])
 
   const fetchCart = useCallback(async () => {
+    if (!user?.uid) return
     try {
-      // We don't pass discount code here, the backend should remember it if we persisted it
-      // But wait, the backend get_cart endpoint takes discount_code as query param optionally
-      // If we persisted it in the Cart model, we don't need to pass it.
-      // Let's assume the backend handles it now.
-      const response = await api.get(`/api/v1/cart/?user_id=${DEFAULT_USER_ID}`)
-      const { items, summary } = mapBackendCartToFrontend(response.data)
-      dispatch({ type: 'SET_CART', payload: { items, summary } })
+      const cart = await cartFirestoreService.getCart(user.uid)
+      if (cart) {
+        dispatch({ type: 'SET_CART', payload: { items: cart.items, summary: cart.summary } })
+      }
     } catch (error) {
       console.error("Failed to fetch cart:", error)
     }
-  }, [])
-
-  useEffect(() => {
-    fetchCart()
-  }, [fetchCart])
+  }, [user?.uid])
 
   const addToCart = async (product: Product & { selectedSize?: string, selectedColor?: string }) => {
+    if (!user?.uid) return
     try {
-        const response = await api.post('/api/v1/cart/add', {
-            user_id: DEFAULT_USER_ID,
-            product_id: product.id,
+        const existingItem = state.cart.find(
+          item => item.id === product.id && item.selectedSize === product.selectedSize
+        )
+        let newItems: CartItem[]
+        if (existingItem) {
+          newItems = state.cart.map(item =>
+            item.id === product.id && item.selectedSize === product.selectedSize
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          )
+        } else {
+          newItems = [...state.cart, {
+            id: product.id,
+            name: product.name,
+            price: product.price,
             quantity: 1,
-            size: product.selectedSize
+            imageUrl: product.imageUrl || product.image_url,
+            image_url: product.image_url || product.imageUrl,
+            description: product.description,
+            selectedSize: product.selectedSize,
+            selectedColor: product.selectedColor
+          }]
+        }
+        const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+        const newSummary = {
+          ...state.summary,
+          subtotal,
+          total: subtotal + state.summary.shipping - state.summary.discount
+        }
+        await cartFirestoreService.saveCart(user.uid, {
+          items: newItems,
+          summary: newSummary,
+          updatedAt: new Date()
         })
-        const { items, summary } = mapBackendCartToFrontend(response.data)
-        dispatch({ type: 'SET_CART', payload: { items, summary } })
+        dispatch({ type: 'SET_CART', payload: { items: newItems, summary: newSummary } })
         setIsCartOpen(true)
     } catch (error) {
         console.error("Failed to add to cart:", error)
@@ -132,50 +144,59 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
 
   const removeFromCart = async (id: number, size?: string) => {
+    if (!user?.uid) return
     try {
-        // If size is not provided, try to find it from current cart state
-        let targetSize = size;
-        if (!targetSize) {
-            const item = state.cart.find(i => i.id === id);
-            if (item) targetSize = item.selectedSize;
+        const newItems = state.cart.filter(item => !(item.id === id && item.selectedSize === size))
+        const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+        const newSummary = {
+          ...state.summary,
+          subtotal,
+          total: subtotal + state.summary.shipping - state.summary.discount
         }
-
-        const response = await api.post('/api/v1/cart/remove', {
-            user_id: DEFAULT_USER_ID,
-            product_id: id,
-            size: targetSize
+        await cartFirestoreService.saveCart(user.uid, {
+          items: newItems,
+          summary: newSummary,
+          updatedAt: new Date()
         })
-        const { items, summary } = mapBackendCartToFrontend(response.data)
-        dispatch({ type: 'SET_CART', payload: { items, summary } })
+        dispatch({ type: 'SET_CART', payload: { items: newItems, summary: newSummary } })
     } catch (error) {
         console.error("Failed to remove from cart:", error)
     }
   }
 
   const updateQuantity = async (id: number, quantity: number, size?: string) => {
+    if (!user?.uid) return
     try {
-        let targetSize = size;
-        if (!targetSize) {
-            const item = state.cart.find(i => i.id === id);
-            if (item) targetSize = item.selectedSize;
+        const newItems = state.cart.map(item =>
+          item.id === id && item.selectedSize === size
+            ? { ...item, quantity }
+            : item
+        )
+        const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+        const newSummary = {
+          ...state.summary,
+          subtotal,
+          total: subtotal + state.summary.shipping - state.summary.discount
         }
-
-        const response = await api.post('/api/v1/cart/update', {
-            user_id: DEFAULT_USER_ID,
-            product_id: id,
-            quantity: quantity,
-            size: targetSize
+        await cartFirestoreService.saveCart(user.uid, {
+          items: newItems,
+          summary: newSummary,
+          updatedAt: new Date()
         })
-        const { items, summary } = mapBackendCartToFrontend(response.data)
-        dispatch({ type: 'SET_CART', payload: { items, summary } })
+        dispatch({ type: 'SET_CART', payload: { items: newItems, summary: newSummary } })
     } catch (error) {
         console.error("Failed to update quantity:", error)
     }
   }
 
-  const clearCart = () => {
-    dispatch({ type: 'CLEAR_CART' })
-    // TODO: Call API to clear cart if needed
+  const clearCart = async () => {
+    if (!user?.uid) return
+    try {
+      await cartFirestoreService.clearCart(user.uid)
+      dispatch({ type: 'CLEAR_CART' })
+    } catch (error) {
+      console.error("Failed to clear cart:", error)
+    }
   }
 
   const setCart = (data: { items: CartItem[], summary: CartState['summary'] }) => {

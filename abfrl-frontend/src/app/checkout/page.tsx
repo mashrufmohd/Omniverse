@@ -12,6 +12,7 @@ import PaymentForm from '@/components/checkout/payment-form'
 import api from '@/lib/api'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 import { useRouter } from 'next/navigation'
+import { ProtectedRoute } from '@/components/auth/protected-route'
 
 // Replace with your publishable key
 const stripePromise = loadStripe("pk_test_51QO8q2P9X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6X6");
@@ -63,16 +64,19 @@ export default function CheckoutPage() {
 
   if (cart.length === 0) {
       return (
+        <ProtectedRoute>
           <div className="min-h-screen bg-[#FDFBF7] pt-24 pb-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
               <div className="text-center">
                   <h1 className="text-2xl font-bold mb-4">Your cart is empty</h1>
                   <Button onClick={() => router.push('/')}>Continue Shopping</Button>
               </div>
           </div>
+        </ProtectedRoute>
       )
   }
 
   return (
+    <ProtectedRoute>
     <div className="min-h-screen bg-[#FDFBF7] pt-24 pb-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold font-syne mb-8 text-center">Checkout</h1>
@@ -257,5 +261,6 @@ export default function CheckoutPage() {
         </div>
       </div>
     </div>
+    </ProtectedRoute>
   )
 }

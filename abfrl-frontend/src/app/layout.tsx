@@ -20,6 +20,9 @@ const spaceMono = Space_Mono({
 export const metadata: Metadata = {
   title: 'ABFRL - Conversational Retail',
   description: 'AI-powered shopping assistant',
+  icons: {
+    icon: '/images/logo.jpg',
+  },
 }
 
 export default function RootLayout({

@@ -8,10 +8,14 @@ import { Trash2, Minus, Plus, ShoppingCart } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { ProtectedRoute } from '@/components/auth/protected-route'
 
 export default function CartPage() {
   const { cart, summary, removeFromCart, updateQuantity } = useCart()
   const router = useRouter()
+
+  return (
+    <ProtectedRoute>
 
   // Use summary from context if available, otherwise fallback (though context should always have summary now)
   const subtotal = summary?.subtotal ?? cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
@@ -167,5 +171,6 @@ export default function CartPage() {
         </div>
       </div>
     </div>
+    </ProtectedRoute>
   )
 }

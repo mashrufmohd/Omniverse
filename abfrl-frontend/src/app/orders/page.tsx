@@ -8,6 +8,7 @@ import Image from 'next/image'
 import { useState, useEffect } from 'react'
 import api from '@/lib/api'
 import { API_ENDPOINTS } from '@/lib/constants'
+import { ProtectedRoute } from '@/components/auth/protected-route'
 
 interface OrderItem {
   name: string
@@ -46,8 +47,9 @@ export default function OrdersPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5]">
-      <Header />
+    <ProtectedRoute>
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <Header />
       
       <main className="container mx-auto px-4 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
@@ -211,5 +213,6 @@ export default function OrdersPage() {
         </div>
       </main>
     </div>
+    </ProtectedRoute>
   )
 }

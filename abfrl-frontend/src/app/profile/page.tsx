@@ -1,15 +1,13 @@
 'use client'
 
-import { useAuth } from '@/hooks/use-auth'
+import { useAuthContext } from '@/context/auth-context'
+import { ProtectedRoute } from '@/components/auth/protected-route'
 
 export default function Profile() {
-  const { user } = useAuth()
-
-  if (!user) {
-    return <div>Please log in</div>
-  }
+  const { user } = useAuthContext()
 
   return (
+    <ProtectedRoute>
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-8">Profile</h1>
       <div className="bg-white p-6 rounded-lg shadow">
@@ -19,5 +17,6 @@ export default function Profile() {
         <p>Loyalty Points: {user.loyaltyPoints}</p>
       </div>
     </div>
+    </ProtectedRoute>
   )
 }
