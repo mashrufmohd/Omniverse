@@ -1,53 +1,79 @@
 from fastapi import APIRouter, HTTPException
-from app.schemas.cart import CheckoutRequest, CartSummary
+from pydantic import BaseModel
+from typing import Optional, List
 from app.services.cart import CartService
 from app.models.order import Order, OrderItem
+from app.models.product import Product
 from datetime import datetime
+from beanie import PydanticObjectId
 
 router = APIRouter()
 
+class ShippingAddress(BaseModel):
+    full_name: str
+    email: str
+    phone: str
+    address_line1: str
+    address_line2: Optional[str] = None
+    city: str
+    state: str
+    zip_code: str
+    country: str = "India"
+
+class CartItemData(BaseModel):
+    id: str
+    name: str
+    price: float
+    quantity: int
+    selectedSize: Optional[str] = None
+
+class CheckoutRequest(BaseModel):
+    user_id: str
+    shipping_address: ShippingAddress
+    cart_items: List[CartItemData]
+    subtotal: float
+    shipping: float
+    discount: float
+    total: float
+    discount_code: Optional[str] = None
+    payment_id: str
+    transaction_id: str
+    notes: Optional[str] = None
+
 @router.post("/checkout", response_model=dict)
 async def checkout(request: CheckoutRequest):
-    """Process checkout and create order"""
+    """Process checkout and create order after payment verification"""
     
-    cart_service = CartService()
-    
-    # Get cart summary with discount if provided
-    cart_summary = await cart_service.get_cart_summary(
-        request.user_id, 
-        request.discount_code
-    )
-    
-    if cart_summary["item_count"] == 0:
+    if len(request.cart_items) == 0:
         raise HTTPException(status_code=400, detail="Cart is empty")
-    
-    # Validate discount code if provided
-    if request.discount_code:
-        validation = await cart_service.validate_discount_code(
-            request.discount_code, 
-            cart_summary["subtotal"]
-        )
-        if not validation["valid"]:
-            raise HTTPException(status_code=400, detail=validation["message"])
     
     # Create order
     try:
-        # Create order items list
+        # Create order items list with product details
         order_items = []
-        for item in cart_summary["items"]:
+        for item in request.cart_items:
             order_item = OrderItem(
-                product_id=str(item["product_id"]),
-                quantity=item["quantity"],
-                price=item["price"]
+                product_id=str(item.id),
+                product_name=item.name,
+                quantity=item.quantity,
+                price=item.price,
+                size=item.selectedSize
             )
             order_items.append(order_item)
 
         order = Order(
             user_id=request.user_id,
-            total_amount=cart_summary["total"],
-            status="confirmed", # Assuming payment is done if we reach here via Stripe flow
-            payment_method=request.payment_info.method_type,
-            payment_intent_id=request.payment_info.payment_intent_id,
+            total_amount=request.total,
+            subtotal=request.subtotal,
+            shipping_cost=request.shipping,
+            discount_amount=request.discount,
+            discount_code=request.discount_code,
+            status="confirmed",
+            payment_status="success",
+            payment_method="mock_upi",
+            razorpay_order_id=request.payment_id,
+            razorpay_payment_id=request.transaction_id,
+            razorpay_signature="MOCK_PAYMENT",
             
             # Shipping Details
             shipping_name=request.shipping_address.full_name,
@@ -60,20 +86,18 @@ async def checkout(request: CheckoutRequest):
             shipping_zip=request.shipping_address.zip_code,
             shipping_country=request.shipping_address.country,
             
-            items=order_items, # Beanie supports embedded documents list
+            items=order_items,
+            notes=request.notes,
             created_at=datetime.utcnow()
         )
         await order.save()
         
-        # Clear cart
-        await cart_service.clear_cart(request.user_id)
-        
         return {
             "success": True,
             "order_id": str(order.id),
-            "total": cart_summary["total"],
+            "total": request.total,
             "message": "Order placed successfully!",
-            "estimated_delivery": "2-3 business days"
+            "estimated_delivery": "3-5 business days"
         }
         
     except Exception as e:

@@ -53,21 +53,39 @@ class MasterAgent:
         elif any(keyword in message_lower for keyword in ["checkout", "proceed to checkout", "complete order", "finalize purchase"]):
             return self._handle_checkout(message, chat_history, user_id)
         
+        # ORDER MANAGEMENT: View order history
+        elif any(keyword in message_lower for keyword in [
+            "my orders", "my order", "order history", "past orders", "previous orders", 
+            "recent orders", "show orders", "view orders", "order list",
+            "what did i order", "what have i ordered", "past purchases",
+            "do we have any orders", "do we have any order", "do i have orders", "do i have any order",
+            "any orders", "any order", "have i ordered", "did i order", "check my orders",
+            "check orders", "see my orders", "show my orders"
+        ]):
+            return await self._handle_view_orders(message, chat_history, user_id)
+        
+        # ORDER MANAGEMENT: Track specific order
+        elif any(keyword in message_lower for keyword in [
+            "track order", "order status", "where is my order", "check order",
+            "order tracking", "delivery status", "shipment status"
+        ]):
+            return await self._handle_track_order(message, message_lower, chat_history, user_id)
+        
         # PRODUCT BROWSING: Show products
         elif any(keyword in message_lower for keyword in ["show", "recommend", "jeans", "shirt", "product", "browse", "looking for"]):
-            # Get products from database
+            # Get products from database using Beanie
             if "jeans" in message_lower or "jean" in message_lower:
-                db_products = self.db.query(Product).filter(Product.category == "jeans").all()
+                db_products = await Product.find(Product.category == "jeans").to_list()
                 category_name = "jeans"
-            elif "shirt" in message_lower:
-                db_products = self.db.query(Product).filter(Product.category == "shirts").all()
+            elif "shirt" in message_lower or "tshirt" in message_lower or "t-shirt" in message_lower:
+                db_products = await Product.find(Product.category == "shirts").to_list()
                 category_name = "shirts"
             else:
-                db_products = self.db.query(Product).limit(5).all()
+                db_products = await Product.find().limit(5).to_list()
                 category_name = "products"
             
             products = [{
-                "id": p.id,
+                "id": str(p.id),
                 "name": p.name,
                 "price": p.price,
                 "description": p.description,
@@ -87,8 +105,8 @@ class MasterAgent:
             words = message_lower.split()
             found_product = None
             
-            # Check for product names in the message
-            all_products = self.db.query(Product).all()
+            # Check for product names in the message using Beanie
+            all_products = await Product.find().to_list()
             for product in all_products:
                 product_words = product.name.lower().split()
                 if any(word in words for word in product_words):
@@ -97,7 +115,7 @@ class MasterAgent:
             
             if found_product:
                 products = [{
-                    "id": found_product.id,
+                    "id": str(found_product.id),
                     "name": found_product.name,
                     "price": found_product.price,
                     "description": found_product.description,
@@ -119,13 +137,9 @@ class MasterAgent:
             response = self.llm.generate_response(prompt, chat_history)
             return {"response": response, "products": [], "cart_summary": None}
             
-        elif any(keyword in message_lower for keyword in ["order", "pay"]):
+        # Note: "order" keyword is handled above in ORDER MANAGEMENT section
+        elif any(keyword in message_lower for keyword in ["pay", "payment"]):
             prompt = f"Customer wants to complete their purchase: '{message}'. Guide them through the checkout process in a helpful way."
-            response = self.llm.generate_response(prompt, chat_history)
-            return {"response": response, "products": [], "cart_summary": None}
-            
-        elif any(keyword in message_lower for keyword in ["track", "status", "delivery"]):
-            prompt = f"Customer asked about order status: '{message}'. Tell them their order is being processed and will arrive in 2-3 business days with tracking info."
             response = self.llm.generate_response(prompt, chat_history)
             return {"response": response, "products": [], "cart_summary": None}
         
@@ -366,12 +380,102 @@ class MasterAgent:
 
     async def _handle_clear_history(self, user_id: str) -> Dict[str, Any]:
         """Handle clearing chat history"""
-        chat_session = await ChatSession.find_one(ChatSession.session_id == user_id)
+        chat_session = await ChatSession.find_one(ChatSession.user_id == user_id)
         if chat_session:
-            await Message.find(Message.session_id == str(chat_session.id)).delete()
+            chat_session.messages = []
+            await chat_session.save()
             
         return {
             "response": "I've cleared our conversation history. How can I help you today?",
             "products": [],
             "cart_summary": None
         }
+    
+    async def _handle_view_orders(self, message: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
+        """Handle viewing order history"""
+        from app.agents.tools import get_user_orders
+        
+        orders_data = await get_user_orders.ainvoke({"user_id": user_id})
+        
+        if isinstance(orders_data, str):
+            # No orders or error
+            response = self.llm.generate_response(
+                f"Customer asked to see their orders but {orders_data}. Respond in a friendly way and suggest they browse products.",
+                chat_history
+            )
+            return {"response": response, "products": [], "cart_summary": None}
+        
+        # Format order history nicely
+        total_orders = orders_data.get("total_orders", 0)
+        orders = orders_data.get("orders", [])
+        
+        orders_summary = []
+        for order in orders[:5]:  # Show last 5 orders
+            items_list = ", ".join([f"{item['name']} x{item['quantity']}" for item in order.get('items', [])])
+            orders_summary.append(
+                f"Order #{order['order_id'][:8]}... on {order['date']}: {items_list} - Total: {order['total_amount']} - Status: {order['status']}"
+            )
+        
+        orders_text = "\n".join(orders_summary)
+        prompt = f"Customer wants to see their order history. They have {total_orders} orders:\n{orders_text}\n\nSummarize this in a friendly, conversational way. Mention they can ask for details about a specific order if needed."
+        response = self.llm.generate_response(prompt, chat_history)
+        
+        return {"response": response, "products": [], "cart_summary": None}
+    
+    async def _handle_track_order(self, message: str, message_lower: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
+        """Handle tracking a specific order"""
+        from app.agents.tools import get_order_status, get_user_orders
+        
+        # Try to extract order ID from message
+        import re
+        order_id_match = re.search(r'[0-9a-f]{24}', message_lower)
+        
+        if order_id_match:
+            # User provided order ID
+            order_id = order_id_match.group(0)
+            order_details = await get_order_status.ainvoke({"order_id": order_id})
+            
+            if isinstance(order_details, str):
+                # Error or not found
+                response = self.llm.generate_response(
+                    f"Customer asked about order {order_id} but {order_details}. Respond politely and offer to show their recent orders instead.",
+                    chat_history
+                )
+                return {"response": response, "products": [], "cart_summary": None}
+            
+            # Format order details
+            items_list = ", ".join([f"{item['product']} (Size: {item['size']}) x{item['quantity']}" for item in order_details.get('items', [])])
+            prompt = f"""Customer wants to track their order. Details:
+Order ID: {order_details['order_id'][:12]}...
+Date: {order_details['order_date']}
+Status: {order_details['status']}
+Payment: {order_details['payment_status']} via {order_details['payment_method']}
+Total: {order_details['total_amount']}
+Items: {items_list}
+Shipping to: {order_details['shipping_address']}
+Estimated delivery: {order_details['estimated_delivery']}
+
+Provide a friendly, detailed update about their order status and when they can expect delivery."""
+            response = self.llm.generate_response(prompt, chat_history)
+        else:
+            # No order ID provided, show recent orders
+            orders_data = await get_user_orders.ainvoke({"user_id": user_id})
+            
+            if isinstance(orders_data, str) or orders_data.get("total_orders", 0) == 0:
+                response = self.llm.generate_response(
+                    "Customer asked to track an order but they don't have any orders yet. Suggest they place an order first.",
+                    chat_history
+                )
+                return {"response": response, "products": [], "cart_summary": None}
+            
+            # Show recent orders
+            orders = orders_data.get("orders", [])[:3]
+            orders_list = "\n".join([
+                f"Order #{order['order_id'][:8]}... from {order['date']} - Status: {order['status']} - Total: {order['total_amount']}"
+                for order in orders
+            ])
+            
+            prompt = f"Customer wants to track an order but didn't specify which one. Their recent orders:\n{orders_list}\n\nAsk them which order they'd like to track or if they want details about the most recent one."
+            response = self.llm.generate_response(prompt, chat_history)
+        
+        return {"response": response, "products": [], "cart_summary": None}

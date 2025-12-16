@@ -1,89 +1,79 @@
 from langchain_core.tools import tool
-from sqlalchemy.orm import Session
-from app.db.session import SessionLocal
-from app.models.product import Product, Inventory
-from app.models.user import User
+from app.models.product import Product
+from app.models.order import Order
+from typing import List, Dict, Any
+import json
 
-# Helper to get DB inside a tool
-def get_db_session():
-    return SessionLocal()
+# Note: Old SQLAlchemy-based tools removed as this project uses MongoDB/Beanie
 
 @tool
-def search_products(query: str):
-    """Search for clothes/products based on a description (e.g. 'black jeans')."""
-    # In production: Connect to Qdrant here. 
-    # MVP Fallback: Simple SQL LIKE search
-    db = get_db_session()
-    products = db.query(Product).filter(Product.name.ilike(f"%{query}%")).limit(5).all()
-    db.close()
-    
-    if not products:
-        return "No products found matching that description."
-    
-    return [{"id": p.id, "name": p.name, "price": p.price} for p in products]
-
-@tool
-def check_inventory(product_id: int, size: str):
-    """Check availability of a product in a specific size."""
-    db = get_db_session()
-    item = db.query(Inventory).filter(
-        Inventory.product_id == product_id, 
-        Inventory.size == size
-    ).first()
-    db.close()
-    
-    if item and item.quantity > 0:
-        return f"Available! We have {item.quantity} in stock at {item.store_location}."
-    return "Sorry, that size is currently out of stock."
-
-@tool
-def get_cart_items(user_id: int = 1):
-    """Get the current items in the user's cart."""
-    from app.models.cart import Cart, CartItem
-    
-    db = get_db_session()
+async def get_user_orders(user_id: str):
+    """Get all orders for a user. Use this when user asks about 'my orders', 'order history', 'past purchases', or 'recent orders'."""
     try:
-        cart = db.query(Cart).filter(Cart.user_id == user_id).first()
-        if not cart or not cart.items:
-            return "Your cart is empty."
+        orders = await Order.find(Order.user_id == user_id).sort("-created_at").limit(10).to_list()
         
-        items_details = []
-        total_amount = 0
+        if not orders:
+            return "You don't have any orders yet. Start shopping to place your first order!"
         
-        for item in cart.items:
-            product = db.query(Product).filter(Product.id == item.product_id).first()
-            if product:
-                item_total = product.price * item.quantity
-                total_amount += item_total
-                items_details.append({
-                    "product": product.name,
-                    "quantity": item.quantity,
-                    "size": item.size,
-                    "price_per_unit": product.price,
-                    "total_price": item_total
-                })
+        orders_summary = []
+        for order in orders:
+            order_info = {
+                "order_id": str(order.id),
+                "date": order.created_at.strftime("%B %d, %Y"),
+                "status": order.status,
+                "total_amount": f"₹{order.total_amount:.2f}",
+                "items_count": len(order.items),
+                "payment_status": order.payment_status,
+                "items": [{"name": item.product_name, "quantity": item.quantity, "price": f"₹{item.price:.2f}"} for item in order.items[:3]]  # Show first 3 items
+            }
+            orders_summary.append(order_info)
         
         return {
-            "items": items_details,
-            "total_cart_value": total_amount,
-            "item_count": len(items_details)
+            "total_orders": len(orders),
+            "orders": orders_summary
         }
-    finally:
-        db.close()
+    except Exception as e:
+        return f"Unable to fetch orders: {str(e)}"
 
 @tool
-def get_loyalty_offers(phone_number: str):
-    """Check loyalty points and available offers for a user."""
-    db = get_db_session()
-    user = db.query(User).filter(User.phone_number == phone_number).first()
-    db.close()
-    
-    if not user:
-        return "User not found. Sign up to earn points!"
-    
-    msg = f"You have {user.loyalty_points} points."
-    if user.loyalty_points > 500:
-        msg += " You are eligible for a Flat 10% OFF coupon!"
-    else:
-        msg += f" Earn {500 - user.loyalty_points} more points to unlock rewards."
-    return msg
+async def get_order_status(order_id: str):
+    """Get detailed status and tracking information for a specific order. Use when user provides an order ID or asks 'where is my order'."""
+    try:
+        from beanie import PydanticObjectId
+        order = await Order.get(PydanticObjectId(order_id))
+        
+        if not order:
+            return f"Order {order_id} not found. Please check the order ID."
+        
+        order_details = {
+            "order_id": str(order.id),
+            "order_date": order.created_at.strftime("%B %d, %Y at %I:%M %p"),
+            "status": order.status,
+            "payment_status": order.payment_status,
+            "payment_method": order.payment_method,
+            "total_amount": f"₹{order.total_amount:.2f}",
+            "subtotal": f"₹{order.subtotal:.2f}",
+            "shipping_cost": f"₹{order.shipping_cost:.2f}",
+            "discount": f"₹{order.discount_amount:.2f}" if order.discount_amount > 0 else "No discount",
+            "items": [
+                {
+                    "product": item.product_name,
+                    "quantity": item.quantity,
+                    "size": item.size or "N/A",
+                    "price": f"₹{item.price:.2f}"
+                }
+                for item in order.items
+            ],
+            "shipping_address": f"{order.shipping_name}, {order.shipping_address_line1}, {order.shipping_city}, {order.shipping_state} - {order.shipping_zip}",
+            "estimated_delivery": "3-5 business days" if order.status == "confirmed" else "Delivered" if order.status == "delivered" else "Pending"
+        }
+        
+        return order_details
+    except Exception as e:
+        return f"Unable to fetch order details: {str(e)}"
+
+# Export all tools as a list for the agent to use
+AVAILABLE_TOOLS = [
+    get_user_orders,
+    get_order_status
+]
