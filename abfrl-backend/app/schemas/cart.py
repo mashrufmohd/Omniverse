@@ -2,8 +2,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 class CartItemSchema(BaseModel):
-    id: int
-    product_id: int
+    id: Optional[str] = None
+    product_id: str
     product_name: str
     quantity: int
     price: float

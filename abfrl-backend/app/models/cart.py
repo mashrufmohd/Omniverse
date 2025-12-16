@@ -1,49 +1,43 @@
-from typing import Optional
-from sqlalchemy import String, Float, ForeignKey, Integer, Boolean, DateTime
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Optional, List
+from beanie import Document, Indexed, Link
+from pydantic import BaseModel, Field
 from datetime import datetime
-from app.db.base import Base
+from app.models.product import Product
 
-class Cart(Base):
-    __tablename__ = "carts"
+class CartItem(BaseModel):
+    product_id: str  # Store as string ID
+    quantity: int = 1
+    size: Optional[str] = None
+    # We can optionally store product snapshot here if needed
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    user_id: Mapped[str] = mapped_column(String, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    applied_discount_code: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    
-    items: Mapped[list["CartItem"]] = relationship(back_populates="cart", cascade="all, delete-orphan")
+class Cart(Document):
+    user_id: Indexed(str)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    applied_discount_code: Optional[str] = None
+    items: List[CartItem] = []
 
-class CartItem(Base):
-    __tablename__ = "cart_items"
+    class Settings:
+        name = "carts"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    cart_id: Mapped[int] = mapped_column(ForeignKey("carts.id"))
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
-    quantity: Mapped[int] = mapped_column(Integer, default=1)
-    size: Mapped[Optional[str]] = mapped_column(String)
-    
-    cart: Mapped["Cart"] = relationship(back_populates="items")
-    product: Mapped["Product"] = relationship()
+class DiscountCode(Document):
+    code: Indexed(str, unique=True)
+    discount_percent: float
+    min_purchase: float = 0
+    active: bool = True
+    valid_until: Optional[datetime] = None
 
-class DiscountCode(Base):
-    __tablename__ = "discount_codes"
+    class Settings:
+        name = "discount_codes"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    code: Mapped[str] = mapped_column(String, unique=True, index=True)
-    discount_percent: Mapped[float] = mapped_column(Float)
-    min_purchase: Mapped[float] = mapped_column(Float, default=0)
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-    valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime)
+class PaymentMethod(Document):
+    user_id: Indexed(str)
+    method_type: str  # credit_card, upi, wallet
+    card_number: Optional[str] = None  # Last 4 digits
+    card_holder: Optional[str] = None
+    expiry_date: Optional[str] = None
+    is_saved: bool = False
 
-class PaymentMethod(Base):
-    __tablename__ = "payment_methods"
+    class Settings:
+        name = "payment_methods"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    user_id: Mapped[str] = mapped_column(String, index=True)
-    method_type: Mapped[str] = mapped_column(String)  # credit_card, upi, wallet
-    card_number: Mapped[Optional[str]] = mapped_column(String)  # Last 4 digits
-    card_holder: Mapped[Optional[str]] = mapped_column(String)
-    expiry_date: Mapped[Optional[str]] = mapped_column(String)
-    is_saved: Mapped[bool] = mapped_column(Boolean, default=False)

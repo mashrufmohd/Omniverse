@@ -2,27 +2,24 @@
 Products endpoints.
 """
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from ....db.session import get_db
+from fastapi import APIRouter
 from ....models.product import Product
 
 router = APIRouter()
 
 
 @router.get("/")
-def get_products(db: Session = Depends(get_db)):
+async def get_products():
     """
     Get all products.
     """
-    products = db.query(Product).all()
+    products = await Product.find_all().to_list()
     
     # Enhance products with sizes and colors from inventory
     result = []
     for product in products:
         product_dict = {
-            "id": product.id,
+            "id": str(product.id),
             "name": product.name,
             "description": product.description,
             "price": product.price,

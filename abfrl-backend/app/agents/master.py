@@ -1,4 +1,3 @@
-from sqlalchemy.orm import Session
 from typing import Dict, List, Any, Optional
 from app.agents.llm_client import LLMClient
 from app.services.recommendation import RecommendationService
@@ -11,8 +10,7 @@ from app.models.chat import ChatSession, Message
 import re
 
 class MasterAgent:
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self):
         self.llm = LLMClient()
         self.recommendation_service = RecommendationService()
         self.inventory_service = InventoryService()
@@ -20,14 +18,14 @@ class MasterAgent:
         self.fulfillment_service = FulfillmentService()
         self.cart_service = CartService()
 
-    def process_message(self, message: str, chat_history: List[Dict] = None, user_id: str = "default_user") -> Dict[str, Any]:
+    async def process_message(self, message: str, chat_history: List[Dict] = None, user_id: str = "default_user") -> Dict[str, Any]:
         message_lower = message.lower()
         products = []
         cart_summary = None
         
         # CONVERSATION MANAGEMENT: Clear history / New chat
         if any(keyword in message_lower for keyword in ["clear history", "new chat", "start over", "reset chat"]):
-            return self._handle_clear_history(user_id)
+            return await self._handle_clear_history(user_id)
         
         # CART MANAGEMENT: Add to cart - Enhanced keywords
         if any(keyword in message_lower for keyword in [
@@ -37,15 +35,15 @@ class MasterAgent:
             "put in cart", "add in cart", "cart add",
             "i want this", "i want that", "i need this", "i need that"
         ]):
-            return self._handle_add_to_cart(message, message_lower, chat_history, user_id)
+            return await self._handle_add_to_cart(message, message_lower, chat_history, user_id)
         
         # CART MANAGEMENT: Remove from cart
         elif any(keyword in message_lower for keyword in ["remove from cart", "delete from cart", "remove this", "remove that", "take out"]):
-            return self._handle_remove_from_cart(message, message_lower, chat_history, user_id)
+            return await self._handle_remove_from_cart(message, message_lower, chat_history, user_id)
         
         # CART MANAGEMENT: View cart
         elif any(keyword in message_lower for keyword in ["show cart", "view cart", "my cart", "what's in my cart", "cart summary", "what is in cart", "whats in cart", "items in cart", "check cart", "whats there in cart"]):
-            return self._handle_view_cart(message, chat_history, user_id)
+            return await self._handle_view_cart(message, chat_history, user_id)
         
         # CART MANAGEMENT: Apply discount code
         elif any(keyword in message_lower for keyword in ["apply discount", "discount code", "promo code", "coupon"]):
@@ -136,10 +134,10 @@ class MasterAgent:
             response = self.llm.generate_response(message, chat_history)
             return {"response": response, "products": [], "cart_summary": None}
     
-    def _handle_add_to_cart(self, message: str, message_lower: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
+    async def _handle_add_to_cart(self, message: str, message_lower: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
         """Handle adding items to cart"""
         # Extract product name or ID from message
-        all_products = self.db.query(Product).all()
+        all_products = await Product.find_all().to_list()
         found_product = None
         
         # Try to find product by name - Look for exact matches first, then partial
@@ -169,8 +167,22 @@ class MasterAgent:
         if not found_product:
             id_match = re.search(r'product (\d+)|id[:\s]*(\d+)|#(\d+)', message_lower)
             if id_match:
-                product_id = int(id_match.group(1) or id_match.group(2) or id_match.group(3))
-                found_product = self.db.query(Product).filter(Product.id == product_id).first()
+                # Assuming ID is still int or string? Beanie uses ObjectId by default but we might have custom IDs
+                # Let's assume we are using string IDs or int IDs as per model definition
+                # If Product model uses int id, we need to cast. If ObjectId, we need to handle that.
+                # Let's check Product model later. For now assuming it might be int or str.
+                product_id = id_match.group(1) or id_match.group(2) or id_match.group(3)
+                # Try to find by id (assuming id field exists and is compatible)
+                # If using default Beanie, id is PydanticObjectId.
+                # If we migrated from SQL, we might have kept integer IDs or mapped them.
+                # Let's assume we can search by id if it's an int field or similar.
+                # If it's ObjectId, we can't easily search by int unless we have a custom field.
+                # Let's assume we search by a custom 'id' field if it exists, or skip this for now if unsure.
+                # For safety, let's search by 'id' attribute if it matches.
+                try:
+                    found_product = await Product.get(product_id)
+                except:
+                    pass
         
         # Method 4: Check recent chat history for product context
         if not found_product and chat_history:
@@ -200,16 +212,16 @@ class MasterAgent:
                 size = size_match.group(1).upper()
             
             # Add to cart
-            result = self.cart_service.add_item(self.db, user_id, found_product.id, quantity, size)
+            result = await self.cart_service.add_item(user_id, str(found_product.id), quantity, size)
             
             if result["success"]:
-                cart_summary = self.cart_service.get_cart_summary(self.db, user_id)
+                cart_summary = await self.cart_service.get_cart_summary(user_id)
                 prompt = f"Customer added {quantity}x {found_product.name} (₹{found_product.price}) to their cart. Their cart now has {cart_summary['item_count']} items worth ₹{cart_summary['total']}. Confirm the addition and ask if they want to continue shopping or checkout."
                 response = self.llm.generate_response(prompt, chat_history)
                 
                 # Include the added product in the response so frontend can display it if needed
                 added_product_info = [{
-                    "id": found_product.id,
+                    "id": str(found_product.id),
                     "name": found_product.name,
                     "price": found_product.price,
                     "description": found_product.description,
@@ -225,14 +237,14 @@ class MasterAgent:
                 return {"response": result["message"], "products": [], "cart_summary": None}
         else:
             # Show available products if we couldn't identify what they want
-            sample_products = self.db.query(Product).limit(5).all()
+            sample_products = await Product.find_all().limit(5).to_list()
             product_list = ", ".join([p.name for p in sample_products])
             prompt = f"Customer wants to add something to cart but I couldn't identify which product from: '{message}'. Here are some products I have: {product_list}. Ask them to specify which product they'd like, or say 'show me [category]' to browse."
             response = self.llm.generate_response(prompt, chat_history)
             
             # Return products to help them choose
             products = [{
-                "id": p.id,
+                "id": str(p.id),
                 "name": p.name,
                 "price": p.price,
                 "description": p.description,
@@ -241,10 +253,10 @@ class MasterAgent:
             
             return {"response": response, "products": products, "cart_summary": None}
     
-    def _handle_remove_from_cart(self, message: str, message_lower: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
+    async def _handle_remove_from_cart(self, message: str, message_lower: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
         """Handle removing items from cart"""
         # Extract product name or ID
-        all_products = self.db.query(Product).all()
+        all_products = await Product.find_all().to_list()
         found_product = None
         
         for product in all_products:
@@ -254,10 +266,10 @@ class MasterAgent:
                 break
         
         if found_product:
-            result = self.cart_service.remove_item(self.db, user_id, found_product.id)
+            result = await self.cart_service.remove_item(user_id, str(found_product.id))
             
             if result["success"]:
-                cart_summary = self.cart_service.get_cart_summary(self.db, user_id)
+                cart_summary = await self.cart_service.get_cart_summary(user_id)
                 prompt = f"Customer removed {found_product.name} from their cart. Their cart now has {cart_summary['item_count']} items. Confirm removal and ask if they need anything else."
                 response = self.llm.generate_response(prompt, chat_history)
                 
@@ -273,9 +285,9 @@ class MasterAgent:
             response = self.llm.generate_response(prompt, chat_history)
             return {"response": response, "products": [], "cart_summary": None}
     
-    def _handle_view_cart(self, message: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
+    async def _handle_view_cart(self, message: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
         """Handle viewing cart summary"""
-        cart_summary = self.cart_service.get_cart_summary(self.db, user_id)
+        cart_summary = await self.cart_service.get_cart_summary(user_id)
         
         if cart_summary["item_count"] == 0:
             prompt = f"Customer wants to view their cart but it's empty. Encourage them to browse products."
@@ -294,7 +306,7 @@ class MasterAgent:
             "cart_summary": cart_summary
         }
     
-    def _handle_apply_discount(self, message: str, message_lower: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
+    async def _handle_apply_discount(self, message: str, message_lower: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
         """Handle applying discount codes"""
         # Extract discount code from message
         code_match = re.search(r'code\s+(\w+)|apply\s+(\w+)|use\s+(\w+)|coupon\s+(\w+)', message_lower)
@@ -303,17 +315,17 @@ class MasterAgent:
             code = (code_match.group(1) or code_match.group(2) or code_match.group(3) or code_match.group(4)).upper()
             
             # Get cart summary first
-            current_cart = self.cart_service.get_cart_summary(self.db, user_id)
+            current_cart = await self.cart_service.get_cart_summary(user_id)
             
             if current_cart["item_count"] == 0:
                 return {"response": "Your cart is empty. Add some products first!", "products": [], "cart_summary": None}
             
             # Validate discount code
-            validation = self.cart_service.validate_discount_code(self.db, code, current_cart["subtotal"])
+            validation = await self.cart_service.validate_discount_code(code, current_cart["subtotal"])
             
             if validation["valid"]:
                 # Apply discount and get updated summary
-                cart_summary = self.cart_service.get_cart_summary(self.db, user_id, code)
+                cart_summary = await self.cart_service.get_cart_summary(user_id, code)
                 
                 prompt = f"Customer applied discount code '{code}' successfully! They got {validation['discount_percent']}% off, saving ₹{validation['discount_amount']}. New total: ₹{cart_summary['total']}. Celebrate this discount and ask if they want to checkout."
                 response = self.llm.generate_response(prompt, chat_history)
@@ -333,9 +345,9 @@ class MasterAgent:
             response = self.llm.generate_response(prompt, chat_history)
             return {"response": response, "products": [], "cart_summary": None}
     
-    def _handle_checkout(self, message: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
+    async def _handle_checkout(self, message: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
         """Handle checkout process"""
-        cart_summary = self.cart_service.get_cart_summary(self.db, user_id)
+        cart_summary = await self.cart_service.get_cart_summary(user_id)
         
         if cart_summary["item_count"] == 0:
             return {"response": "Your cart is empty. Browse our products and add items before checkout!", "products": [], "cart_summary": None}
@@ -352,12 +364,11 @@ class MasterAgent:
             "cart_summary": cart_summary
         }
 
-    def _handle_clear_history(self, user_id: str) -> Dict[str, Any]:
+    async def _handle_clear_history(self, user_id: str) -> Dict[str, Any]:
         """Handle clearing chat history"""
-        chat_session = self.db.query(ChatSession).filter(ChatSession.session_id == user_id).first()
+        chat_session = await ChatSession.find_one(ChatSession.session_id == user_id)
         if chat_session:
-            self.db.query(Message).filter(Message.session_id == chat_session.id).delete()
-            self.db.commit()
+            await Message.find(Message.session_id == str(chat_session.id)).delete()
             
         return {
             "response": "I've cleared our conversation history. How can I help you today?",

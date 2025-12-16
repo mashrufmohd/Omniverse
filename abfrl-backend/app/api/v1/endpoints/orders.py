@@ -2,19 +2,16 @@
 Orders endpoints.
 """
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from ....db.session import get_db
-from ....models.order import Order
+from fastapi import APIRouter
+from app.models.order import Order
 
 router = APIRouter()
 
 
 @router.get("/")
-def get_orders(db: Session = Depends(get_db)):
+async def get_orders():
     """
     Get all orders.
     """
-    orders = db.query(Order).all()
+    orders = await Order.find_all().to_list()
     return orders

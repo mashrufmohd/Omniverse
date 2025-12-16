@@ -6,7 +6,8 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # Database
-    DATABASE_URL: str
+    MONGODB_URL: str
+    DATABASE_NAME: str = "abfrl_db"
     
     # Security
     SECRET_KEY: str = "development_secret_key"

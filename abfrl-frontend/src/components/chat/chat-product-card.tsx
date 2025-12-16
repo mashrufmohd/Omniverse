@@ -15,9 +15,10 @@ export function ChatProductCard({ product, onAction }: ChatProductCardProps) {
   const { addToCart } = useCart()
 
   const handleAddToCart = () => {
-    addToCart(product)
     if (onAction) {
       onAction('add_to_cart', product)
+    } else {
+      addToCart(product)
     }
   }
 

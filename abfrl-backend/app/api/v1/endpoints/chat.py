@@ -1,7 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from langchain_core.messages import HumanMessage
-from app.db.session import get_db
+from fastapi import APIRouter, HTTPException
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.agents.master import MasterAgent
 from app.models.chat import ChatSession, Message
@@ -10,22 +7,22 @@ from datetime import datetime
 router = APIRouter()
 
 @router.post("/", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
+async def chat_endpoint(request: ChatRequest):
     user_id = request.user_id
     
     # 1. Get or Create Chat Session (Persistent)
-    chat_session = db.query(ChatSession).filter(ChatSession.session_id == user_id).first()
+    chat_session = await ChatSession.find_one(ChatSession.session_id == user_id)
     if not chat_session:
         chat_session = ChatSession(session_id=user_id, channel=request.channel)
-        db.add(chat_session)
-        db.commit()
-        db.refresh(chat_session)
+        await chat_session.save()
     
     # 2. Retrieve History from DB
     # Get last 20 messages ordered by timestamp
-    db_messages = db.query(Message).filter(
-        Message.session_id == chat_session.id
-    ).order_by(Message.timestamp.asc()).limit(20).all()
+    db_messages = await Message.find(
+        Message.session_id == str(chat_session.id)
+    ).sort("-timestamp").limit(20).to_list()
+    
+    db_messages.reverse() # Back to chronological order
     
     chat_history = []
     for msg in db_messages:
@@ -36,17 +33,17 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     
     # 3. Invoke Agent with history and user_id
     try:
-        agent = MasterAgent(db)
-        result = agent.process_message(request.message, chat_history, user_id)
+        agent = MasterAgent()
+        result = await agent.process_message(request.message, chat_history, user_id)
         
         # 4. Store conversation in DB
         user_msg = Message(
-            session_id=chat_session.id,
+            session_id=str(chat_session.id),
             role="user",
             content=request.message,
             timestamp=datetime.utcnow()
         )
-        db.add(user_msg)
+        await user_msg.save()
         
         # Ensure content is a string before saving to DB
         response_content = result["response"]
@@ -59,13 +56,12 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
                 response_content = str(response_content)
 
         ai_msg = Message(
-            session_id=chat_session.id,
+            session_id=str(chat_session.id),
             role="ai",
             content=response_content,
             timestamp=datetime.utcnow()
         )
-        db.add(ai_msg)
-        db.commit()
+        await ai_msg.save()
         
         return ChatResponse(
             response=response_content,
@@ -79,12 +75,11 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/history/{user_id}")
-async def clear_chat_history(user_id: str, db: Session = Depends(get_db)):
+async def clear_chat_history(user_id: str):
     """Clear chat history for a user"""
-    chat_session = db.query(ChatSession).filter(ChatSession.session_id == user_id).first()
+    chat_session = await ChatSession.find_one(ChatSession.session_id == user_id)
     if chat_session:
         # Delete all messages
-        db.query(Message).filter(Message.session_id == chat_session.id).delete()
-        db.commit()
+        await Message.find(Message.session_id == str(chat_session.id)).delete()
         return {"status": "success", "message": "Chat history cleared"}
     return {"status": "success", "message": "No history found"}

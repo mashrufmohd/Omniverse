@@ -1,52 +1,49 @@
-from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from app.models.cart import Cart, CartItem, DiscountCode
 from app.models.product import Product
 from datetime import datetime
+from beanie import PydanticObjectId
 
 class CartService:
     
     @staticmethod
-    def get_or_create_cart(db: Session, user_id: str) -> Cart:
+    async def get_or_create_cart(user_id: str) -> Cart:
         """Get existing cart or create new one for user"""
-        cart = db.query(Cart).filter(Cart.user_id == user_id).first()
+        cart = await Cart.find_one(Cart.user_id == user_id)
         if not cart:
             cart = Cart(user_id=user_id)
-            db.add(cart)
-            db.commit()
-            db.refresh(cart)
+            await cart.insert()
         return cart
     
     @staticmethod
-    def add_item(db: Session, user_id: str, product_id: int, quantity: int = 1, size: Optional[str] = None) -> Dict[str, Any]:
+    async def add_item(user_id: str, product_id: str, quantity: int = 1, size: Optional[str] = None) -> Dict[str, Any]:
         """Add item to cart"""
-        cart = CartService.get_or_create_cart(db, user_id)
+        cart = await CartService.get_or_create_cart(user_id)
         
         # Check if product exists
-        product = db.query(Product).filter(Product.id == product_id).first()
+        try:
+            product = await Product.get(PydanticObjectId(product_id))
+        except:
+            product = None
+            
         if not product:
             return {"success": False, "message": "Product not found"}
         
         # Check if item already in cart
-        existing_item = db.query(CartItem).filter(
-            CartItem.cart_id == cart.id,
-            CartItem.product_id == product_id,
-            CartItem.size == size
-        ).first()
+        existing_item = next((item for item in cart.items if item.product_id == product_id and item.size == size), None)
         
         if existing_item:
             existing_item.quantity += quantity
         else:
             cart_item = CartItem(
-                cart_id=cart.id,
                 product_id=product_id,
                 quantity=quantity,
                 size=size
             )
-            db.add(cart_item)
+            cart.items.append(cart_item)
         
         cart.updated_at = datetime.utcnow()
-        db.commit()
+        await cart.save()
         
         return {
             "success": True,
@@ -56,48 +53,110 @@ class CartService:
         }
     
     @staticmethod
-    def remove_item(db: Session, user_id: str, product_id: int, size: Optional[str] = None) -> Dict[str, Any]:
+    async def remove_item(user_id: str, product_id: str, size: Optional[str] = None) -> Dict[str, Any]:
         """Remove item from cart"""
-        cart = CartService.get_or_create_cart(db, user_id)
+        cart = await CartService.get_or_create_cart(user_id)
         
-        cart_item = db.query(CartItem).filter(
-            CartItem.cart_id == cart.id,
-            CartItem.product_id == product_id,
-            CartItem.size == size
-        ).first()
+        initial_count = len(cart.items)
+        cart.items = [item for item in cart.items if not (item.product_id == product_id and item.size == size)]
         
-        if cart_item:
-            product_name = cart_item.product.name
-            db.delete(cart_item)
+        if len(cart.items) < initial_count:
             cart.updated_at = datetime.utcnow()
-            db.commit()
-            return {"success": True, "message": f"Removed {product_name} from cart"}
+            await cart.save()
+            return {"success": True, "message": "Removed item from cart"}
         
         return {"success": False, "message": "Item not found in cart"}
     
     @staticmethod
-    def update_quantity(db: Session, user_id: str, product_id: int, quantity: int, size: Optional[str] = None) -> Dict[str, Any]:
+    async def update_quantity(user_id: str, product_id: str, quantity: int, size: Optional[str] = None) -> Dict[str, Any]:
         """Update item quantity"""
-        cart = CartService.get_or_create_cart(db, user_id)
+        cart = await CartService.get_or_create_cart(user_id)
         
-        cart_item = db.query(CartItem).filter(
-            CartItem.cart_id == cart.id,
-            CartItem.product_id == product_id,
-            CartItem.size == size
-        ).first()
+        existing_item = next((item for item in cart.items if item.product_id == product_id and item.size == size), None)
         
-        if cart_item:
+        if existing_item:
             if quantity <= 0:
-                return CartService.remove_item(db, user_id, product_id, size)
-            cart_item.quantity = quantity
+                return await CartService.remove_item(user_id, product_id, size)
+            existing_item.quantity = quantity
             cart.updated_at = datetime.utcnow()
-            db.commit()
+            await cart.save()
             return {"success": True, "message": f"Updated quantity to {quantity}"}
         
         return {"success": False, "message": "Item not found in cart"}
     
     @staticmethod
-    def get_cart_summary(db: Session, user_id: str, discount_code: Optional[str] = None) -> Dict[str, Any]:
+    async def get_cart_summary(user_id: str, discount_code: Optional[str] = None) -> Dict[str, Any]:
+        cart = await CartService.get_or_create_cart(user_id)
+        
+        # Use stored discount code if not provided
+        if not discount_code and cart.applied_discount_code:
+            discount_code = cart.applied_discount_code
+            
+        subtotal = 0
+        items_details = []
+        
+        for item in cart.items:
+            try:
+                product = await Product.get(PydanticObjectId(item.product_id))
+                if product:
+                    item_total = product.price * item.quantity
+                    subtotal += item_total
+                    items_details.append({
+                        "id": item.product_id,
+                        "name": product.name,
+                        "price": product.price,
+                        "quantity": item.quantity,
+                        "size": item.size,
+                        "image_url": product.image_url,
+                        "total": item_total
+                    })
+            except:
+                continue
+                
+        shipping = 0 if subtotal > 1000 else 100
+        discount_amount = 0
+        
+        if discount_code:
+            validation = await CartService.validate_discount_code(discount_code, subtotal)
+            if validation["valid"]:
+                discount_amount = validation["discount_amount"]
+                
+        total = subtotal + shipping - discount_amount
+        
+        return {
+            "items": items_details,
+            "subtotal": subtotal,
+            "shipping": shipping,
+            "discount": discount_amount,
+            "total": total,
+            "discount_code": discount_code if discount_amount > 0 else None
+        }
+
+    @staticmethod
+    async def validate_discount_code(code: str, subtotal: float) -> Dict[str, Any]:
+        discount = await DiscountCode.find_one(DiscountCode.code == code, DiscountCode.active == True)
+        
+        if not discount:
+            return {"valid": False, "message": "Invalid discount code", "discount_amount": 0}
+            
+        if discount.valid_until and discount.valid_until < datetime.utcnow():
+            return {"valid": False, "message": "Discount code expired", "discount_amount": 0}
+            
+        if subtotal < discount.min_purchase:
+            return {"valid": False, "message": f"Minimum purchase of {discount.min_purchase} required", "discount_amount": 0}
+            
+        discount_amount = (subtotal * discount.discount_percent) / 100
+        return {"valid": True, "message": "Discount applied", "discount_amount": discount_amount}
+    
+    @staticmethod
+    async def clear_cart(user_id: str) -> bool:
+        cart = await CartService.get_or_create_cart(user_id)
+        cart.items = []
+        cart.applied_discount_code = None
+        cart.updated_at = datetime.utcnow()
+        await cart.save()
+        return True
+
         """Get complete cart summary with pricing"""
         cart = CartService.get_or_create_cart(db, user_id)
         
@@ -158,20 +217,20 @@ class CartService:
         }
     
     @staticmethod
-    def clear_cart(db: Session, user_id: str) -> bool:
+    async def clear_cart(user_id: str) -> bool:
         """Clear all items from cart"""
-        cart = CartService.get_or_create_cart(db, user_id)
-        db.query(CartItem).filter(CartItem.cart_id == cart.id).delete()
-        db.commit()
+        cart = await CartService.get_or_create_cart(user_id)
+        cart.items = []
+        await cart.save()
         return True
     
     @staticmethod
-    def validate_discount_code(db: Session, code: str, subtotal: float) -> Dict[str, Any]:
+    async def validate_discount_code(code: str, subtotal: float) -> Dict[str, Any]:
         """Validate discount code"""
-        discount_obj = db.query(DiscountCode).filter(
+        discount_obj = await DiscountCode.find_one(
             DiscountCode.code == code.upper(),
             DiscountCode.active == True
-        ).first()
+        )
         
         if not discount_obj:
             return {"valid": False, "message": "Invalid discount code"}

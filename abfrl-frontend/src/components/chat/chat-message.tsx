@@ -44,7 +44,7 @@ export function ChatMessage({ message, onAction }: ChatMessageProps) {
           <div className="flex gap-4 overflow-x-auto pb-6 pt-2 w-full max-w-full mt-2 px-1 scrollbar-hide snap-x">
             {message.products.map((product) => (
               <div key={product.id} className="min-w-[260px] max-w-[260px] snap-center">
-                <ChatProductCard product={product} />
+                <ChatProductCard product={product} onAction={onAction} />
               </div>
             ))}
           </div>

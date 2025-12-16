@@ -1,6 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from app.db.session import get_db
+from fastapi import APIRouter, HTTPException
 from app.services.cart import CartService
 from pydantic import BaseModel
 import stripe
@@ -17,9 +15,9 @@ class PaymentIntentRequest(BaseModel):
     discount_code: str = None
 
 @router.post("/create-payment-intent")
-async def create_payment_intent(request: PaymentIntentRequest, db: Session = Depends(get_db)):
+async def create_payment_intent(request: PaymentIntentRequest):
     cart_service = CartService()
-    cart_summary = cart_service.get_cart_summary(db, request.user_id, request.discount_code)
+    cart_summary = await cart_service.get_cart_summary(request.user_id, request.discount_code)
     
     if cart_summary["total"] <= 0:
         raise HTTPException(status_code=400, detail="Cart total must be greater than 0")

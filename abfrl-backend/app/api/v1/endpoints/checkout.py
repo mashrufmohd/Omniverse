@@ -1,6 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from app.db.session import get_db
+from fastapi import APIRouter, HTTPException
 from app.schemas.cart import CheckoutRequest, CartSummary
 from app.services.cart import CartService
 from app.models.order import Order, OrderItem
@@ -9,14 +7,13 @@ from datetime import datetime
 router = APIRouter()
 
 @router.post("/checkout", response_model=dict)
-async def checkout(request: CheckoutRequest, db: Session = Depends(get_db)):
+async def checkout(request: CheckoutRequest):
     """Process checkout and create order"""
     
     cart_service = CartService()
     
     # Get cart summary with discount if provided
-    cart_summary = cart_service.get_cart_summary(
-        db, 
+    cart_summary = await cart_service.get_cart_summary(
         request.user_id, 
         request.discount_code
     )
@@ -26,8 +23,7 @@ async def checkout(request: CheckoutRequest, db: Session = Depends(get_db)):
     
     # Validate discount code if provided
     if request.discount_code:
-        validation = cart_service.validate_discount_code(
-            db, 
+        validation = await cart_service.validate_discount_code(
             request.discount_code, 
             cart_summary["subtotal"]
         )
@@ -36,6 +32,16 @@ async def checkout(request: CheckoutRequest, db: Session = Depends(get_db)):
     
     # Create order
     try:
+        # Create order items list
+        order_items = []
+        for item in cart_summary["items"]:
+            order_item = OrderItem(
+                product_id=str(item["product_id"]),
+                quantity=item["quantity"],
+                price=item["price"]
+            )
+            order_items.append(order_item)
+
         order = Order(
             user_id=request.user_id,
             total_amount=cart_summary["total"],
@@ -54,42 +60,30 @@ async def checkout(request: CheckoutRequest, db: Session = Depends(get_db)):
             shipping_zip=request.shipping_address.zip_code,
             shipping_country=request.shipping_address.country,
             
+            items=order_items, # Beanie supports embedded documents list
             created_at=datetime.utcnow()
         )
-        db.add(order)
-        db.flush()
-        
-        # Create order items
-        for item in cart_summary["items"]:
-            order_item = OrderItem(
-                order_id=order.id,
-                product_id=item["product_id"],
-                quantity=item["quantity"],
-                price=item["price"]
-            )
-            db.add(order_item)
+        await order.save()
         
         # Clear cart
-        cart_service.clear_cart(db, request.user_id)
-        
-        db.commit()
-        db.refresh(order)
+        await cart_service.clear_cart(request.user_id)
         
         return {
             "success": True,
-            "order_id": order.id,
+            "order_id": str(order.id),
             "total": cart_summary["total"],
             "message": "Order placed successfully!",
             "estimated_delivery": "2-3 business days"
         }
         
     except Exception as e:
-        db.rollback()
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Checkout failed: {str(e)}")
 
 @router.get("/cart/{user_id}", response_model=dict)
-async def get_cart(user_id: str, db: Session = Depends(get_db)):
+async def get_cart(user_id: str):
     """Get cart summary for user"""
     cart_service = CartService()
-    cart_summary = cart_service.get_cart_summary(db, user_id)
+    cart_summary = await cart_service.get_cart_summary(user_id)
     return cart_summary

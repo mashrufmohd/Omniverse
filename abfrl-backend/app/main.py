@@ -2,12 +2,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.endpoints import chat, checkout, payment, cart, products, orders
+from app.db.mongodb import init_db
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
     description="ABFRL Conversational Sales Agent Backend"
 )
+
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
 
 # CORS Configuration
 origins = ["*"] # Allow all for Hackathon/MVP

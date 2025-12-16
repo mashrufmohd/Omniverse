@@ -9,7 +9,7 @@ class FulfillmentService:
     """
 
     @staticmethod
-    def fulfill_order(order_id: int) -> bool:
+    def fulfill_order(order_id: str) -> bool:
         """
         Mock order fulfillment.
         """

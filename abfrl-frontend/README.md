@@ -23,3 +23,4 @@ Conversational Retail Sales Agent Frontend built with Next.js.
 - Cart management
 - User authentication
 - Voice input/output
+
