@@ -1,15 +1,3 @@
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  orderBy, 
-  getDocs,
-  Timestamp,
-  doc,
-  updateDoc
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { Message } from '@/types';
 import api from '@/lib/api';
 
@@ -18,65 +6,48 @@ export interface ChatMessage {
   userId: string;
   text: string;
   sender: 'user' | 'ai';
-  timestamp: Timestamp;
+  timestamp: Date;
   products?: any[];
 }
 
 export const chatService = {
-  // Save message to Firestore
-  async saveMessage(userId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>) {
-    const chatRef = collection(db, 'chats');
-    const docRef = await addDoc(chatRef, {
-      ...message,
-      userId,
-      timestamp: Timestamp.now(),
-    });
-    return docRef.id;
-  },
+  // Chat messages are automatically saved by backend, no need for separate save
 
-  // Get user's chat history
+  // Get user's chat history from MongoDB
   async getChatHistory(userId: string): Promise<Message[]> {
-    const chatRef = collection(db, 'chats');
-    const q = query(
-      chatRef, 
-      where('userId', '==', userId),
-      orderBy('timestamp', 'asc')
-    );
-
-    const querySnapshot = await getDocs(q);
-    const messages: Message[] = [];
-
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      messages.push({
-        id: doc.id,
-        text: data.text,
-        sender: data.sender,
-        timestamp: data.timestamp.toDate(),
-        products: data.products || [],
-      });
-    });
-
-    return messages;
+    try {
+      const response = await api.get(`/api/v1/chat/history/${userId}`);
+      
+      if (response.data.success) {
+        return response.data.messages.map((msg: any) => ({
+          id: msg.timestamp,
+          text: msg.content,
+          sender: msg.role === 'user' ? 'user' : 'ai',
+          timestamp: new Date(msg.timestamp),
+          products: [],
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching chat history:', error);
+      return [];
+    }
   },
 
-  // Clear user's chat history
+  // Clear user's chat history from MongoDB
   async clearChatHistory(userId: string) {
-    const chatRef = collection(db, 'chats');
-    const q = query(chatRef, where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
-
-    const deletePromises = querySnapshot.docs.map(doc => 
-      updateDoc(doc.ref, { deleted: true })
-    );
-
-    await Promise.all(deletePromises);
+    try {
+      await api.delete(`/api/v1/chat/history/${userId}`);
+    } catch (error) {
+      console.error('Error clearing chat history:', error);
+    }
   },
 
   // Stream chat response with typing effect
   async streamChatResponse(
     userId: string, 
-    message: string, 
+    message: string,
+    sessionId: string | undefined,
     onChunk: (text: string) => void,
     onComplete: (data: any) => void,
     onError: (error: string) => void
@@ -90,7 +61,8 @@ export const chatService = {
         body: JSON.stringify({
           user_id: userId,
           message: message,
-          channel: 'web'
+          channel: 'web',
+          session_id: sessionId
         }),
       });
 

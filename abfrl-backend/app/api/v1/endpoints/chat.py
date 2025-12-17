@@ -13,15 +13,16 @@ router = APIRouter()
 async def chat_stream_endpoint(request: ChatRequest):
     """Streaming chat endpoint for real-time responses"""
     user_id = request.user_id
+    session_id = request.session_id or user_id  # Use provided session_id or fallback to user_id
     
     async def generate():
         try:
             # Get or Create Chat Session
-            chat_session = await ChatSession.find_one(ChatSession.user_id == user_id)
+            chat_session = await ChatSession.find_one(ChatSession.session_id == session_id)
             if not chat_session:
                 chat_session = ChatSession(
                     user_id=user_id,
-                    session_id=user_id,
+                    session_id=session_id,
                     channel=request.channel
                 )
                 await chat_session.save()
@@ -159,6 +160,56 @@ async def chat_endpoint(request: ChatRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/sessions/{user_id}")
+async def get_user_sessions(user_id: str):
+    """Get all chat sessions for a user"""
+    sessions = await ChatSession.find(ChatSession.user_id == user_id).sort("-created_at").to_list()
+    return {
+        "success": True,
+        "sessions": [{
+            "session_id": s.session_id,
+            "created_at": s.created_at.isoformat(),
+            "message_count": len(s.messages),
+            "title": s.messages[0].content[:50] if s.messages else "New Chat"
+        } for s in sessions]
+    }
+
+@router.post("/sessions")
+async def create_new_session(request: dict):
+    """Create a new chat session"""
+    user_id = request.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    
+    import uuid
+    session_id = f"{user_id}_{uuid.uuid4().hex[:8]}"
+    
+    chat_session = ChatSession(
+        user_id=user_id,
+        session_id=session_id,
+        channel="web"
+    )
+    await chat_session.save()
+    
+    return {
+        "success": True,
+        "session_id": session_id,
+        "created_at": chat_session.created_at.isoformat()
+    }
+
+@router.get("/history/{session_id}")
+async def get_chat_history(session_id: str):
+    """Get chat history for a specific session from MongoDB"""
+    chat_session = await ChatSession.find_one(ChatSession.session_id == session_id)
+    if chat_session and chat_session.messages:
+        messages = [{
+            "role": msg.role,
+            "content": msg.content,
+            "timestamp": msg.timestamp.isoformat()
+        } for msg in chat_session.messages]
+        return {"success": True, "messages": messages}
+    return {"success": True, "messages": []}
 
 @router.delete("/history/{user_id}")
 async def clear_chat_history(user_id: str):

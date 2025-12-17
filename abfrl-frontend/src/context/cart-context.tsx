@@ -3,7 +3,7 @@
 import { createContext, useContext, useReducer, ReactNode, useState, useEffect, useCallback } from 'react'
 import { Product, CartItem } from '@/types'
 import { useAuthContext } from '@/context/auth-context'
-import { cartFirestoreService } from '@/services/cart-firestore.service'
+import api from '@/lib/api'
 
 interface CartState {
   cart: CartItem[]
@@ -53,112 +53,92 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false)
   const { user } = useAuthContext()
 
+  // Fetch cart from MongoDB via backend API
+  const fetchCartFromBackend = useCallback(async () => {
+    if (!user?.uid) return
+    try {
+      const response = await api.get(`/api/v1/cart/?user_id=${user.uid}`)
+      const cartData = response.data
+      
+      // Transform backend cart format to frontend format
+      const items: CartItem[] = cartData.items.map((item: any) => ({
+        id: parseInt(item.id),
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        imageUrl: item.image_url,
+        image_url: item.image_url,
+        selectedSize: item.size,
+      }))
+      
+      const summary = {
+        subtotal: cartData.subtotal,
+        shipping: cartData.shipping,
+        discount: cartData.discount,
+        total: cartData.total,
+        discountCode: cartData.discount_code
+      }
+      
+      dispatch({ type: 'SET_CART', payload: { items, summary } })
+    } catch (error) {
+      console.error("Failed to fetch cart from backend:", error)
+    }
+  }, [user?.uid])
+
   useEffect(() => {
     if (!user?.uid) {
       dispatch({ type: 'CLEAR_CART' })
       return
     }
 
-    const loadCart = async () => {
-      try {
-        const cart = await cartFirestoreService.getCart(user.uid)
-        if (cart) {
-          dispatch({ type: 'SET_CART', payload: { items: cart.items, summary: cart.summary } })
-        } else {
-          await cartFirestoreService.saveCart(user.uid, {
-            items: [],
-            summary: { subtotal: 0, shipping: 0, discount: 0, total: 0 },
-            updatedAt: new Date()
-          })
-        }
-      } catch (error) {
-        console.error("Failed to load cart:", error)
-      }
-    }
-
-    loadCart()
-
-    const unsubscribe = cartFirestoreService.subscribeToCart(user.uid, (cart) => {
-      if (cart) {
-        dispatch({ type: 'SET_CART', payload: { items: cart.items, summary: cart.summary } })
-      }
-    })
-
-    return () => unsubscribe()
-  }, [user?.uid])
-
-  const fetchCart = useCallback(async () => {
-    if (!user?.uid) return
-    try {
-      const cart = await cartFirestoreService.getCart(user.uid)
-      if (cart) {
-        dispatch({ type: 'SET_CART', payload: { items: cart.items, summary: cart.summary } })
-      }
-    } catch (error) {
-      console.error("Failed to fetch cart:", error)
-    }
+    fetchCartFromBackend()
+    // No polling - only fetch on demand when cart operations happen
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid])
 
   const addToCart = async (product: Product & { selectedSize?: string, selectedColor?: string }) => {
-    if (!user?.uid) return
+    if (!user?.uid) {
+      console.error('User not logged in')
+      alert('Please login to add items to cart')
+      return
+    }
+    
+    console.log('addToCart called with:', { user_id: user.uid, product_id: product.id, size: product.selectedSize })
+    
     try {
-        const existingItem = state.cart.find(
-          item => item.id === product.id && item.selectedSize === product.selectedSize
-        )
-        let newItems: CartItem[]
-        if (existingItem) {
-          newItems = state.cart.map(item =>
-            item.id === product.id && item.selectedSize === product.selectedSize
-              ? { ...item, quantity: item.quantity + 1 }
-              : item
-          )
-        } else {
-          newItems = [...state.cart, {
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            quantity: 1,
-            imageUrl: product.imageUrl || product.image_url,
-            image_url: product.image_url || product.imageUrl,
-            description: product.description,
-            selectedSize: product.selectedSize,
-            selectedColor: product.selectedColor
-          }]
-        }
-        const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-        const newSummary = {
-          ...state.summary,
-          subtotal,
-          total: subtotal + state.summary.shipping - state.summary.discount
-        }
-        await cartFirestoreService.saveCart(user.uid, {
-          items: newItems,
-          summary: newSummary,
-          updatedAt: new Date()
+        // Add to MongoDB via backend API
+        const response = await api.post('/api/v1/cart/add', {
+          user_id: user.uid,
+          product_id: product.id.toString(),
+          quantity: 1,
+          size: product.selectedSize
         })
-        dispatch({ type: 'SET_CART', payload: { items: newItems, summary: newSummary } })
+        
+        console.log('Cart add response:', response.data)
+
+        // Refresh cart from backend to get updated state
+        await fetchCartFromBackend()
         setIsCartOpen(true)
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to add to cart:", error)
+        console.error("Error details:", error.response?.data)
+        alert(`Failed to add to cart: ${error.response?.data?.detail || error.message}`)
     }
   }
 
   const removeFromCart = async (id: number, size?: string) => {
     if (!user?.uid) return
     try {
-        const newItems = state.cart.filter(item => !(item.id === id && item.selectedSize === size))
-        const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-        const newSummary = {
-          ...state.summary,
-          subtotal,
-          total: subtotal + state.summary.shipping - state.summary.discount
-        }
-        await cartFirestoreService.saveCart(user.uid, {
-          items: newItems,
-          summary: newSummary,
-          updatedAt: new Date()
+        // Remove from MongoDB via backend API
+        await api.post('/api/v1/cart/remove', {
+          user_id: user.uid,
+          product_id: id.toString(),
+          size: size,
+          quantity: 0
         })
-        dispatch({ type: 'SET_CART', payload: { items: newItems, summary: newSummary } })
+
+        // Refresh cart from backend
+        await fetchCartFromBackend()
     } catch (error) {
         console.error("Failed to remove from cart:", error)
     }
@@ -167,23 +147,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const updateQuantity = async (id: number, quantity: number, size?: string) => {
     if (!user?.uid) return
     try {
-        const newItems = state.cart.map(item =>
-          item.id === id && item.selectedSize === size
-            ? { ...item, quantity }
-            : item
-        )
-        const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-        const newSummary = {
-          ...state.summary,
-          subtotal,
-          total: subtotal + state.summary.shipping - state.summary.discount
-        }
-        await cartFirestoreService.saveCart(user.uid, {
-          items: newItems,
-          summary: newSummary,
-          updatedAt: new Date()
+        // Update in MongoDB via backend API
+        await api.post('/api/v1/cart/update', {
+          user_id: user.uid,
+          product_id: id.toString(),
+          quantity: quantity,
+          size: size
         })
-        dispatch({ type: 'SET_CART', payload: { items: newItems, summary: newSummary } })
+
+        // Refresh cart from backend
+        await fetchCartFromBackend()
     } catch (error) {
         console.error("Failed to update quantity:", error)
     }
@@ -192,7 +165,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clearCart = async () => {
     if (!user?.uid) return
     try {
-      await cartFirestoreService.clearCart(user.uid)
+      await api.post(`/api/v1/cart/clear?user_id=${user.uid}`)
       dispatch({ type: 'CLEAR_CART' })
     } catch (error) {
       console.error("Failed to clear cart:", error)
@@ -214,7 +187,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       updateQuantity, 
       clearCart, 
       setCart,
-      refreshCart: fetchCart,
+      refreshCart: fetchCartFromBackend,
       isCartOpen,
       openCart,
       closeCart

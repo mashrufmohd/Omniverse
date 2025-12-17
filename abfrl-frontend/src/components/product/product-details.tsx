@@ -19,11 +19,17 @@ export function ProductDetails({ product }: ProductDetailsProps) {
   const [activeImage, setActiveImage] = useState(product.image_url)
 
   const handleAddToCart = () => {
-    addToCart({
-      ...product,
-      selectedSize,
-      selectedColor
-    })
+    console.log('Adding to cart:', { product, selectedSize, selectedColor })
+    try {
+      addToCart({
+        ...product,
+        selectedSize,
+        selectedColor
+      })
+    } catch (error) {
+      console.error('Error in handleAddToCart:', error)
+      alert('Failed to add to cart. Please try again.')
+    }
   }
 
   return (

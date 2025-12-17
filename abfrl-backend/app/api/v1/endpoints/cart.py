@@ -64,3 +64,38 @@ async def clear_cart(user_id: str):
     cart_service = CartService()
     return await cart_service.clear_cart(user_id)
 
+@router.post("/sync-from-firestore")
+async def sync_cart_from_firestore(request: dict):
+    """
+    Sync cart from Firestore to MongoDB.
+    This is a migration endpoint for existing carts.
+    
+    Expected request body:
+    {
+        "user_id": "firebase_uid",
+        "items": [{"product_id": "123", "quantity": 1, "size": "M"}, ...]
+    }
+    """
+    cart_service = CartService()
+    user_id = request.get("user_id")
+    items = request.get("items", [])
+    
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    
+    # Clear existing cart first
+    await cart_service.clear_cart(user_id)
+    
+    # Add all items
+    results = []
+    for item in items:
+        result = await cart_service.add_item(
+            user_id=user_id,
+            product_id=str(item.get("id")),
+            quantity=item.get("quantity", 1),
+            size=item.get("selectedSize")
+        )
+        results.append(result)
+    
+    return {"success": True, "synced_items": len(results), "results": results}
+

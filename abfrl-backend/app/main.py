@@ -62,6 +62,10 @@ app.add_middleware(
 # Include centralized API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to ABFRL Conversational Sales Agent API"}
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "ABFRL Agent"}

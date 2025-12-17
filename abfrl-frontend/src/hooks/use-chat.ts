@@ -7,31 +7,36 @@ import { CartContext } from '@/context/cart-context'
 import { useAuthContext } from '@/context/auth-context'
 import { chatService } from '@/services/chat.service'
 
-export function useChat() {
+export function useChat(sessionId?: string) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
+  const [currentSessionId, setCurrentSessionId] = useState<string | undefined>(sessionId)
   const cartContext = useContext(CartContext)
   const { user } = useAuthContext()
 
-  // Load chat history when user logs in
-  useEffect(() => {
-    const loadChatHistory = async () => {
-      if (user?.uid) {
-        try {
-          const history = await chatService.getChatHistory(user.uid)
-          setMessages(history)
-        } catch (error) {
-          console.error('Error loading chat history:', error)
-        }
-      } else {
-        setMessages([])
-      }
+  const loadHistory = useCallback(async (sessionIdToLoad: string) => {
+    try {
+      const history = await chatService.getChatHistory(sessionIdToLoad)
+      setMessages(history)
+      setCurrentSessionId(sessionIdToLoad)
+    } catch (error) {
+      console.error('Error loading chat history:', error)
     }
+  }, [])
 
-    loadChatHistory()
-  }, [user?.uid])
+  // Load chat history when session changes
+  useEffect(() => {
+    if (sessionId && user?.uid) {
+      loadHistory(sessionId)
+    } else if (user?.uid && !sessionId) {
+      // New chat - clear messages
+      setMessages([])
+      setCurrentSessionId(undefined)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, user?.uid])
 
   const sendMessage = useCallback(async (text: string) => {
     if (!user?.uid) {
@@ -50,14 +55,7 @@ export function useChat() {
     }
     setMessages(prev => [...prev, userMessage])
 
-    // Save user message to Firestore (non-blocking)
-    chatService.saveMessage(user.uid, {
-      userId: user.uid,
-      text,
-      sender: 'user',
-    }).catch(error => {
-      console.log('Note: Message not saved to history (offline):', error.message)
-    })
+    // Messages are automatically saved by backend streaming endpoint
 
     // Create placeholder AI message for streaming
     const aiMessageId = (Date.now() + 1).toString()
@@ -83,6 +81,7 @@ export function useChat() {
       await chatService.streamChatResponse(
         user.uid,
         text,
+        currentSessionId,
         // onChunk - append text as it streams
         (chunk: string) => {
           fullText += chunk
@@ -209,6 +208,7 @@ export function useChat() {
     isLoading, 
     isStreaming, 
     streamingMessageId,
-    clearHistory 
+    clearHistory,
+    loadHistory
   }
 }

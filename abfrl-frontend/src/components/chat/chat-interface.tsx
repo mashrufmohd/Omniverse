@@ -7,10 +7,20 @@ import { ChatMessage as ChatMessageType } from '@/types'
 import { useChat } from '@/hooks/use-chat'
 import { useCart } from '@/hooks/use-cart'
 
-export function ChatInterface() {
-  const { messages, sendMessage, isLoading, isStreaming, streamingMessageId } = useChat()
+interface ChatInterfaceProps {
+  sessionId?: string
+}
+
+export function ChatInterface({ sessionId }: ChatInterfaceProps) {
+  const { messages, sendMessage, isLoading, isStreaming, streamingMessageId, loadHistory } = useChat(sessionId)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { addToCart, refreshCart } = useCart()
+
+  useEffect(() => {
+    if (sessionId) {
+      loadHistory(sessionId)
+    }
+  }, [sessionId, loadHistory])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -18,8 +28,7 @@ export function ChatInterface() {
 
   useEffect(() => {
     scrollToBottom()
-    refreshCart()
-  }, [messages, refreshCart])
+  }, [messages])
 
   const handleSendMessage = async (content: string) => {
     await sendMessage(content)

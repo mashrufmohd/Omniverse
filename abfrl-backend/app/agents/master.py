@@ -42,7 +42,13 @@ class MasterAgent:
             return await self._handle_remove_from_cart(message, message_lower, chat_history, user_id)
         
         # CART MANAGEMENT: View cart
-        elif any(keyword in message_lower for keyword in ["show cart", "view cart", "my cart", "what's in my cart", "cart summary", "what is in cart", "whats in cart", "items in cart", "check cart", "whats there in cart"]):
+        elif any(keyword in message_lower for keyword in [
+            "show cart", "view cart", "my cart", "what's in my cart", "cart summary", 
+            "what is in cart", "whats in cart", "items in cart", "check cart", 
+            "whats there in cart", "anything in cart", "do we have anything in cart",
+            "do i have anything in cart", "do we have any items in cart", 
+            "cart items", "in my cart", "in cart", "have in cart"
+        ]):
             return await self._handle_view_cart(message, chat_history, user_id)
         
         # CART MANAGEMENT: Apply discount code
@@ -284,8 +290,8 @@ class MasterAgent:
             
             if result["success"]:
                 cart_summary = await self.cart_service.get_cart_summary(user_id)
-                prompt = f"Customer removed {found_product.name} from their cart. Their cart now has {cart_summary['item_count']} items. Confirm removal and ask if they need anything else."
-                response = self.llm.generate_response(prompt, chat_history)
+                # Deterministic message for confirmation of removal
+                response = f"Removed {found_product.name} from your cart. You now have {cart_summary['item_count']} item(s) in your cart. Would you like anything else?"
                 
                 return {
                     "response": response,
@@ -300,20 +306,33 @@ class MasterAgent:
             return {"response": response, "products": [], "cart_summary": None}
     
     async def _handle_view_cart(self, message: str, chat_history: List[Dict], user_id: str) -> Dict[str, Any]:
-        """Handle viewing cart summary"""
+        """Handle viewing cart summary — deterministic, tool-first, no LLM for transactional facts"""
         cart_summary = await self.cart_service.get_cart_summary(user_id)
+
+        # If we failed to fetch cart (service returns error), surface deterministic error
+        if cart_summary is None:
+            return {"response": "I couldn't fetch your cart right now. Please try again in a moment.", "products": [], "cart_summary": None}
+
+        # Calculate item count from items array
+        item_count = len(cart_summary.get("items", []))
         
-        if cart_summary["item_count"] == 0:
-            prompt = f"Customer wants to view their cart but it's empty. Encourage them to browse products."
-            response = self.llm.generate_response(prompt, chat_history)
-            return {"response": response, "products": [], "cart_summary": cart_summary}
-        
-        # Build detailed cart description
-        items_desc = ", ".join([f"{item['quantity']}x {item['product_name']} (₹{item['item_total']})" for item in cart_summary["items"]])
-        
-        prompt = f"Customer viewing cart. Items: {items_desc}. Subtotal: ₹{cart_summary['subtotal']}, Shipping: ₹{cart_summary['shipping']}, Discount: ₹{cart_summary['discount']}, Total: ₹{cart_summary['total']}. Present this information clearly and ask if they want to apply a discount code or proceed to checkout."
-        response = self.llm.generate_response(prompt, chat_history)
-        
+        if item_count == 0:
+            # Deterministic response — do not call LLM for this
+            return {"response": "Your cart is currently empty. 🛒 Feel free to browse products and I'll add items for you.", "products": [], "cart_summary": cart_summary}
+
+        # Build deterministic cart description from authoritative data
+        lines = [f"Your cart has {item_count} item(s):"]
+        for item in cart_summary['items']:
+            lines.append(f"- {item['quantity']} × {item['name']} — ₹{item['total']} (size: {item.get('size','N/A')})")
+        lines.append(f"Subtotal: ₹{cart_summary['subtotal']}")
+        lines.append(f"Shipping: ₹{cart_summary['shipping']}")
+        if cart_summary.get('discount'):
+            lines.append(f"Discount: ₹{cart_summary['discount']}")
+        lines.append(f"Total: ₹{cart_summary['total']}")
+        lines.append("Would you like to apply a discount code or proceed to checkout?")
+
+        response = "\n".join(lines)
+
         return {
             "response": response,
             "products": [],
