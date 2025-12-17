@@ -16,6 +16,11 @@ class Product(Document):
     stock: int = 0
     metadata_info: dict = {}
     inventory: List[Inventory] = []
+    
+    # Shopkeeper information
+    shopkeeper_id: Optional[str] = None  # Firebase UID or MongoDB ID of shopkeeper
+    shopkeeper_name: Optional[str] = None  # Shop name for display
+    is_verified: bool = False  # Admin can verify shopkeeper products
 
     class Settings:
         name = "products"

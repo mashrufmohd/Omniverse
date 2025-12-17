@@ -54,11 +54,18 @@ const statusConfig = {
 }
 
 export default function OrdersPage() {
-  const { user } = useAuthContext()
+  const { user, loading: authLoading } = useAuthContext()
   const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+
+  // Redirect shopkeepers to login page - they need to login as user
+  useEffect(() => {
+    if (!authLoading && user && user.role === 'shopkeeper') {
+      router.push('/login')
+    }
+  }, [user, authLoading, router])
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -90,6 +97,23 @@ export default function OrdersPage() {
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  // Don't render page content if shopkeeper - show loading instead
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="text-lg font-mono">Loading...</div>
+      </div>
+    )
+  }
+
+  if (user && user.role === 'shopkeeper') {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="text-lg font-mono">Redirecting...</div>
+      </div>
+    )
   }
 
   return (

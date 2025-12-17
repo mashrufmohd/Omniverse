@@ -13,39 +13,44 @@ export interface UserProfile {
   uid: string;
   email: string;
   displayName: string | null;
+  role: 'user' | 'shopkeeper';
   createdAt: Date;
 }
 
 export const authService = {
   // Sign up new user
-  async signUp(email: string, password: string, displayName: string) {
+  async signUp(email: string, password: string, displayName: string, role: 'user' | 'shopkeeper' = 'user') {
     try {
-      console.log('Creating user with email:', email);
+      console.log('  📝 Creating Firebase user account...')
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      console.log('User created with UID:', user.uid);
+      console.log('  ✓ User created with UID:', user.uid)
 
-      // Update display name
-      console.log('Updating profile with display name...');
+      console.log('  📝 Updating user profile...')
       await updateProfile(user, { displayName });
-      console.log('Profile updated successfully');
+      console.log('  ✓ Profile updated with name:', displayName)
 
-      // Create user profile in Firestore
-      const userProfile: UserProfile = {
-        uid: user.uid,
-        email: user.email!,
-        displayName,
-        createdAt: new Date(),
-      };
+      // Try to create user profile in Firestore (optional, don't fail if Firestore is offline)
+      try {
+        console.log(`  📝 Saving user profile to Firestore with role: ${role}`)
+        const userProfile: UserProfile = {
+          uid: user.uid,
+          email: user.email!,
+          displayName,
+          role,
+          createdAt: new Date(),
+        };
 
-      console.log('Saving user profile to Firestore...');
-      await setDoc(doc(db, 'users', user.uid), userProfile);
-      console.log('User profile saved to Firestore');
+        await setDoc(doc(db, 'users', user.uid), userProfile);
+        console.log('  ✓ User profile saved to Firestore')
+      } catch (firestoreError) {
+        console.warn('  ⚠️  Could not save to Firestore (optional):', firestoreError);
+        // Don't throw - Firestore is optional for authentication
+      }
 
-      return user;
+      return userCredential;
     } catch (error: any) {
       console.error('Sign up error:', error);
-      // If user was created but profile update failed, still return success
       if (error.code === 'auth/email-already-in-use') {
         throw new Error('Email already in use');
       }

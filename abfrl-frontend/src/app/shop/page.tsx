@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Header } from '@/components/layout/header'
 import { ProductCard } from '@/components/product/product-card'
 import { Product } from '@/types'
@@ -10,14 +11,24 @@ import { Button } from '@/components/ui/button'
 import api from '@/lib/api'
 import { API_ENDPOINTS } from '@/lib/constants'
 import { ProtectedRoute } from '@/components/auth/protected-route'
+import { useAuthContext } from '@/context/auth-context'
 
 export default function ShopPage() {
+  const { user, loading: authLoading } = useAuthContext()
+  const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [priceRange, setPriceRange] = useState([0, 5000])
   const [selectedSizes, setSelectedSizes] = useState<string[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>('All Products')
   const [isSizeOpen, setIsSizeOpen] = useState(true)
+
+  // Redirect shopkeepers to login page - they need to login as user
+  useEffect(() => {
+    if (!authLoading && user && user.role === 'shopkeeper') {
+      router.push('/login')
+    }
+  }, [user, authLoading, router])
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -34,7 +45,22 @@ export default function ShopPage() {
     fetchProducts()
   }, [])
 
-  const allSizes = Array.from(new Set(products.flatMap(p => p.sizes || []))).sort()
+  // Don't render page content if shopkeeper - show loading instead
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="text-lg font-mono">Loading...</div>
+      </div>
+    )
+  }
+
+  if (user && user.role === 'shopkeeper') {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="text-lg font-mono">Redirecting...</div>
+      </div>
+    )
+  }
 
   const toggleSize = (size: string) => {
     setSelectedSizes(prev => 

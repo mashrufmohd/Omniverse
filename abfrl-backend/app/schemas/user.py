@@ -30,6 +30,16 @@ class User(UserBase):
         from_attributes = True
 
 
+class UserUpdate(BaseModel):
+    """
+    Schema for updating a user.
+    """
+    username: str | None = None
+    email: str | None = None
+    full_name: str | None = None
+    name: str | None = None
+
+
 class Token(BaseModel):
     """
     Token schema.

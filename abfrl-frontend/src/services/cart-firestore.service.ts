@@ -46,8 +46,13 @@ export const cartFirestoreService = {
         return cartSnap.data() as UserCart;
       }
       return null;
-    } catch (error) {
-      console.error('Error getting cart:', error);
+    } catch (error: any) {
+      // Firestore is offline or not available - this is OK
+      if (error.code === 'unavailable' || error.message?.includes('offline')) {
+        console.warn('Firestore is offline - cart will be stored locally only');
+      } else {
+        console.error('Error getting cart:', error);
+      }
       return null;
     }
   },

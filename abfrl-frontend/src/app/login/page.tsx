@@ -30,6 +30,12 @@ export default function LoginPage() {
     }
   }
 
+  const handleAdminLogin = () => {
+    setEmail('admin@gmail.com')
+    setPassword('Admin@2024!SecurePass#Firebase')
+    setError('')
+  }
+
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center px-4 py-12">
       <div className="max-w-md w-full">

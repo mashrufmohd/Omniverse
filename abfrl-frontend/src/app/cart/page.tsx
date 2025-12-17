@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useCart } from '@/hooks/use-cart'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -9,10 +10,36 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/auth/protected-route'
+import { useAuthContext } from '@/context/auth-context'
 
 export default function CartPage() {
+  const { user, loading: authLoading } = useAuthContext()
   const { cart, summary, removeFromCart, updateQuantity } = useCart()
   const router = useRouter()
+
+  // Redirect shopkeepers to login page - they need to login as user
+  useEffect(() => {
+    if (!authLoading && user && user.role === 'shopkeeper') {
+      router.push('/login')
+    }
+  }, [user, authLoading, router])
+
+  // Don't render page content if shopkeeper - show loading instead
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="text-lg font-mono">Loading...</div>
+      </div>
+    )
+  }
+
+  if (user && user.role === 'shopkeeper') {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="text-lg font-mono">Redirecting...</div>
+      </div>
+    )
+  }
 
   return (
     <ProtectedRoute>

@@ -1,8 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import firebase_admin
+from firebase_admin import credentials
 from app.core.config import settings
-from app.api.v1.endpoints import chat, checkout, payment, cart, products, orders
+from app.api.v1.api import api_router
 from app.db.mongodb import init_db
+import os
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -13,6 +16,37 @@ app = FastAPI(
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+    
+    # Initialize Firebase Admin SDK
+    try:
+        firebase_admin.get_app()
+        print("✅ Firebase Admin already initialized")
+    except ValueError:
+        # Initialize with project ID from environment
+        try:
+            # Get project ID from environment variable
+            firebase_project_id = os.getenv('FIREBASE_PROJECT_ID', 'omniverse-6ae98')
+            
+            # Initialize with project ID (required for token verification)
+            firebase_admin.initialize_app(options={
+                'projectId': firebase_project_id
+            })
+            
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print("🔥 FIREBASE ADMIN INITIALIZED")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print(f"📌 Project ID: {firebase_project_id}")
+            print("✅ Token verification: ENABLED")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print()
+        except Exception as e:
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print("❌ FIREBASE INITIALIZATION FAILED")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print(f"Error: {e}")
+            print("⚠️  Firebase authentication will NOT work!")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print()
 
 # CORS Configuration
 origins = ["*"] # Allow all for Hackathon/MVP
@@ -25,13 +59,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include Routers
-app.include_router(chat.router, prefix=f"{settings.API_V1_STR}/chat", tags=["chat"])
-app.include_router(products.router, prefix=f"{settings.API_V1_STR}/products", tags=["products"])
-app.include_router(cart.router, prefix=f"{settings.API_V1_STR}/cart", tags=["cart"])
-app.include_router(checkout.router, prefix=f"{settings.API_V1_STR}/checkout", tags=["checkout"])
-app.include_router(payment.router, prefix=f"{settings.API_V1_STR}/payment", tags=["payment"])
-app.include_router(orders.router, prefix=f"{settings.API_V1_STR}/orders", tags=["orders"])
+# Include centralized API router
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def health_check():
